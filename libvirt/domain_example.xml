@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<!--type 表示 hypervisor 类型-->
+<domain type='kvm'>
+  <name>CentOS_for_test</name>
+  <!--uuid 由 libvirt 自动分配-->
+  <uuid></uuid>
+  <!--memory 表示客户机最大可用内存值-->
+  <memory unit='KiB'>1048576</memory>
+  <!--currentMemory 表示启动时即分配给客户机的内存-->
+  <currentMemory unit='KiB'>1048576</currentMemory>
+  <!--分配给 domain 的虚拟 cpu 数目-->
+  <vcpu>1</vcpu>
+  <os>
+    <!--cpu 架构为 x86-64-->
+    <!--machine 表示机器类型-->
+    <!--客户机类型为硬件辅助虚拟机-->
+    <type arch='x86_64' machine='pc'>hvm</type>
+    <!--设置启动设备, 在下面的定义中使用了待安装系统的 iso 文件-->
+    <boot dev='cdrom'/>
+  </os>
+  <features>
+    <!--电源管理, 例如, KVM 客户机的关机操作需要该特性支持-->
+    <acpi/>
+    <!--对可编程 IRQ 管理的支持-->
+    <apic/>
+    <!--物理地址拓展模式, 使 32 位客户机使用 4GB 以上的内存-->
+    <pae/>
+  </features>
+  <devices>
+    <!--配置使用的设备模拟器-->
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+    <!--type 定义磁盘设备来源的类型-->
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <!--定义磁盘设备来源, 这里是 file 与外层 type 中的定义一致-->
+      <source file='/home/tom/Projects/VirtMachine/IMGs/centos.qcow2'/>
+      <!--在客户机中所看到的磁盘属性-->
+      <!--dev 表示在客户机中看到的设备名称为 hda-->
+      <target dev='hda' bus='ide'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <source file='/home/tom/Projects/VirtMachine/ISOs/CentOS-7-x86_64-Minimal-1708.iso'/>
+      <target dev='hdb' bus='ide'/>
+    </disk>
+    <interface type='network'>
+      <source network='default'/>
+    </interface>
+    <!--连接到客户机图形显示方式的配置-->
+    <!--使用 vnc 连接到客户机, 端口自动分配-->
+    <!--VNC 是一个图形化桌面分享系统, 使用 Remote Frame Buffer (RFB) 协议远程控制另一台计算机-->
+    <graphics type='vnc' port='-1' autoport='yes'/>
+  </devices>
+</domain>

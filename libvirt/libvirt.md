@@ -23,13 +23,59 @@
 ## 使用示例
 介绍 `libvirt` 的基本使用
 ### libvirt 和 virsh
-- `virsh` 构建于 `libvirt` 之上, 允许以 `shell` 方式使用 `libvirt` 功能.
-- `virsh` 基本操作
-  - 定义 `Domain` 配置文件
-  - 启动 `Domain`
-  - 列出 `Domain`
-  - 挂起, 重启 `Domain`
-  - 连接 `Domain`
+参考文档:
+- [Creating a KVM virtual machine using CLI](https://www.rivy.org/2013/02/creating-a-kvm-virtual-machine/)
+- [Domain XML format](https://libvirt.org/formatdomain.html)
+
+`virsh` 构建于 `libvirt` 之上, 允许以 `shell` 方式使用 `libvirt` 功能.
+
+- 创建磁盘镜像
+  - `qemu-img create -f qcow2 [img_name].qcow2 10G`, -f 指定磁盘镜像格式为 `qcow2`
+  - `qcow` 是 `QEMU` 使用的一种磁盘镜像文件格式, 全称是 `QEMU Copy on Write`. 它使用一种优化的磁盘分配策略, 一直延迟到真正使用时才分配存储空间. 改格式有两个版本, 分别是 `qcow` 与 `qcow2`.
+  - 写时复制是指一个 `qcow` 文件可以共享作为 `base` 镜像中的数据, 只有需要修改时才把相应的数据拷贝过来. 在 `docker` 中也有这个概念.
+  - 初始镜像大小只有大概 192 KB
+    ```
+    $ ls -l
+    total 196
+    -rw-r--r-- 1 tom tom 196624 Apr 16 20:45 centos.qcow2
+    ```
+- 使用 `xml` 文件定义 `domain`, 见 [domain_example](./domain_example.xml)
+- 创建 `domain`
+  ```
+  $ virsh create domain_example.xml
+  Domain alpine created from domain_example.xml
+  ```
+  -
+- 列出 `domain`
+  ```
+  $ virsh list
+   Id    Name                           State
+  ----------------------------------------------------
+   4     CentOS_for_test                running
+  ```
+- 挂起, 重启 `Domain`
+  ```
+  $ virsh suspend 4
+  Domain 4 suspended
+
+  $ virsh list
+   Id    Name                           State
+  ----------------------------------------------------
+   4     CentOS_for_test                paused
+
+  $ virsh resume 4
+  Domain 4 resumed
+
+  $ virsh list
+   Id    Name                           State
+  ----------------------------------------------------
+   4     CentOS_for_test                running
+  ```
+- 连接 `Domain` 可以使用 `virt-manager`, 可以自动显示出已安装设备
+  - 连接后会进入常见的系统安装流程
+  - 安装成功后需要修改 `boot` 设备启动顺序, 将 `<boot dev='cdrom'/>` 改为 `<boot dev='hd'/>`.
+  - 这一步既可以使用 `$ virsh edit [domain]` 修改 `xml` 配置; 也可以 `$ virsh destroy [domain]` 后, 再修改配置重新创建.
+- 查看 `domain` `xml`格式信息  `virsh dumpxml [domain_name]`
 
 ### libvirt 和 Python
 
