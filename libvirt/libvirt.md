@@ -43,9 +43,8 @@
 - 创建 `domain`
   ```
   $ virsh create domain_example.xml
-  Domain alpine created from domain_example.xml
+  Domain CentOS_for_test created from domain_example.xml
   ```
-  -
 - 列出 `domain`
   ```
   $ virsh list
