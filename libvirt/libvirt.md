@@ -77,10 +77,91 @@
 - 查看 `domain` `xml`格式信息  `virsh dumpxml [domain_name]`
 
 ### libvirt 和 Python
+文档链接: [Libvirt Application Development Guide Using Python](https://libvirt.org/docs/libvirt-appdev-guide-python/en-US/html/)
+
+`libvirt` 提供了对多种语言的绑定, 在 `Python` 中使用需要安装 `libvirt-python` 软件包.
+
+```Python
+import libvirt
+
+
+class LibvirtKVM:
+
+    def __init__(self):
+        self._conn = None
+
+    @property
+    def conn(self):
+        if self._conn is None:
+            self._conn = libvirt.open('qemu:///system')
+
+        return self._conn
+
+    def list_dom_id(self):
+        try:
+            dom_ids = self.conn.listDomainsID()
+        except libvirt.libvirtError as e:
+            print(e)
+            return
+
+        for dom_id in dom_ids:
+            yield dom_id
+
+    def dom_info(self, id):
+        try:
+            dom = self.conn.lookupByID(id)
+        except libvirt.libvirtError as e:
+            print(e)
+            return
+
+        state, maxmem, mem, cpus, cput = dom.info()
+        print('The state is ' + str(state))
+        print('The max memory is ' + str(maxmem))
+        print('The memory is ' + str(mem))
+        print('The number of cpus is ' + str(cpus))
+        print('The cpu time is ' + str(cput))
+
+
+if __name__ == '__main__':
+    test = LibvirtKVM()
+
+    for domain in test.list_dom_id():
+        test.dom_info(domain)
+```
+
+这段程序展示了如何通过 `libvirt` 获取 `domain` 信息. 要注意的是, 虽然 `libvirt` 提供了对多种语言的绑定, 但是 `api` 文档只针对了 `C` 语言. 要查看 `info()` 返回值的含义, 可以:
+- 打开 `info()` 的定义, 找到对应的 `C` 函数为 `virDomainGetInfo`
+  ```python
+  def info(self):
+    """Extract information about a domain. Note that if the connection used to get the domain is limited only a partial set of the information can be extracted. """
+    ret = libvirtmod.virDomainGetInfo(self._o)
+    if ret is None: raise libvirtError ('virDomainGetInfo() failed', dom=self)
+    return ret
+  ```
+- 在 `domain` `api` 文档中查找该函数
+  ```
+  int virDomainGetInfo (virDomainPtr domain,
+                        virDomainInfoPtr info)
+
+  domain     a domain object
+  info       pointer to a virDomainInfo structure allocated by the user
+  Returns    0 in case of success and -1 in case of failure.
+  ```
+- `info` 信息定义在 `virDomainInfo` 中
+  ```C
+  struct virDomainInfo {
+    unsigned char       state       // the running state, one of virDomainState
+    unsigned long       maxMem      // the maximum memory in KBytes allowed
+    unsigned long       memory      // the memory in KBytes used by the domain
+    unsigned short      nrVirtCpu   // the number of virtual CPUs for the domain
+    unsigned long long  cpuTime     // the CPU time used in nanoseconds
+  }
+  ```
 
 ## API 概述
 
 ## 使用 libvirt 的应用程序
-[文档连接](https://libvirt.org/apps.html)
+文档连接: [Applications using libvirt](https://libvirt.org/apps.html)
+
 - `OpenStack` 云操作系统, 即可用于公有云, 也可用于私有云. 它的多个组件管理着计算, 存储和网络资源, 并使用 `dashboard` 与用户交互. 其中的计算组件使用 `libvirt` 管理虚拟机的生命周期, 完成监控等操作.
 - `collectd` `libvirt-plugin` 是它的一部分, 用于收集系统中虚拟客户机的统计数据. 通过该插件, 可以收集到每个客户机的 `CPU`, 网络接口和块设备的使用率, 而无需在客户机系统中安装 `collectd`.
