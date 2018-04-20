@@ -16,6 +16,7 @@
     <!--客户机类型为硬件辅助虚拟机-->
     <type arch='x86_64' machine='pc'>hvm</type>
     <!--设置启动设备, 在下面的定义中使用了待安装系统的 iso 文件-->
+    <!--boot device 是指任何可以读取或包含了系统启动所需文件的设备-->
     <boot dev='cdrom'/>
   </os>
   <features>
