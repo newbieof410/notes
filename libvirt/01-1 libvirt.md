@@ -40,7 +40,7 @@
     total 196
     -rw-r--r-- 1 tom tom 196624 Apr 16 20:45 centos.qcow2
     ```
-- 使用 `xml` 文件定义 `domain`, 见 [domain_example](./domain_example.xml)
+- 使用 `xml` 文件定义 `domain`, 见 [domain_example](./01-2 domain_example.xml)
 - 创建 `domain`
   ```
   $ virsh create domain_example.xml
