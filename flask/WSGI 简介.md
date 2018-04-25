@@ -36,3 +36,51 @@
     # 返回响应体
     return [response_body]
   ```
+
+## 环境变量字典
+- 环境变量字典由服务器产生, 其中的数据是对客户请求处理后得到的 `CGI` 风格的变量. 下面这段脚本会输出整个字典中的内容.
+  ```python
+  #! /usr/bin/env python
+
+  # Python 自带的 WSGI 服务器
+  from wsgiref.simple_server import make_server
+
+  def application (environ, start_response):
+
+      # 对环境变量字典中的键值对排序, 并转换为字符串
+      response_body = [
+          '%s: %s' % (key, value) for key, value in sorted(environ.items())
+      ]
+      response_body = '\n'.join(response_body)
+
+      status = '200 OK'
+      response_headers = [
+          ('Content-Type', 'text/plain'),
+          ('Content-Length', str(len(response_body)))
+      ]
+      start_response(status, response_headers)
+
+      return [response_body]
+
+  # 实例化服务器
+  httpd = make_server (
+      'localhost', # 主机名
+      8051, # 监听的端口
+      application # 应用程序对象
+  )
+
+  # 等待处理一个请求, 完成后退出
+  httpd.handle_request()
+  ```
+
+## 可遍历响应对象
+- 在上面的例子中, 如果把
+  ```python
+  return [response_body]
+  ```
+  改为
+  ```python
+  return response_body
+  ```
+  仍然可以正常运行, 但速度可能变慢. 因为字符串本身就是可遍历对象, 修改后就从将字符串整个返回给客户端, 变为逐个字符地返回. 所以为了提高性能, 要将响应内容包起来, 使它成为一个整体.
+- 如果响应体中包含多个字符串, 那么响应体的长度会是所有这些字符串长度之和.
