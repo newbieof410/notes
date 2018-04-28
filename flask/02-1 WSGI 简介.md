@@ -1,5 +1,5 @@
 # WSGI
-> [原文链接 &raquo;](http://wsgi.tutorial.codepoint.net/intro)
+> `WSGI` 代表 `Web` 服务网关接口. 它是一个规范, 描述了 `Web` 服务器和 `Web` 应用程序之间应该如何通信, 还有 `Web` 应用程序间应该如何串联起来处理请求.
 
 ## 简介
 - `WSGI` 不是服务器, 不是 `python` 模块, 不是一种框架, 也不是 `API` 或者某种软件. 它只是一种接口规范, 用于服务器和应用程序间的通信.
@@ -26,8 +26,8 @@
 
     # HTTP 报头信息格式 [(Header name, Header value)]
     response_headers = [
-        ('Content-Type', 'text/plain'),
-        ('Content-Length', str(len(response_body)))
+      ('Content-Type', 'text/plain'),
+      ('Content-Length', str(len(response_body)))
     ]
 
     # 发送响应头
@@ -47,20 +47,20 @@
 
   def application (environ, start_response):
 
-      # 对环境变量字典中的键值对排序, 并转换为字符串
-      response_body = [
-          '%s: %s' % (key, value) for key, value in sorted(environ.items())
-      ]
-      response_body = '\n'.join(response_body)
+    # 对环境变量字典中的键值对排序, 并转换为字符串
+    response_body = [
+      '%s: %s' % (key, value) for key, value in sorted(environ.items())
+    ]
+    response_body = '\n'.join(response_body)
 
-      status = '200 OK'
-      response_headers = [
-          ('Content-Type', 'text/plain'),
-          ('Content-Length', str(len(response_body)))
-      ]
-      start_response(status, response_headers)
+    status = '200 OK'
+    response_headers = [
+      ('Content-Type', 'text/plain'),
+      ('Content-Length', str(len(response_body)))
+    ]
+    start_response(status, response_headers)
 
-      return [response_body]
+    return [response_body]
 
   # 实例化服务器
   httpd = make_server (
@@ -84,3 +84,42 @@
   ```
   仍然可以正常运行, 但速度可能变慢. 因为字符串本身就是可遍历对象, 修改后就从将字符串整个返回给客户端, 变为逐个字符地返回. 所以为了提高性能, 要将响应内容包起来, 使它成为一个整体.
 - 如果响应体中包含多个字符串, 那么响应体的长度会是所有这些字符串长度之和.
+
+## 服务器端
+- 服务器必须提供上面提到的 `environ` 字典和 `start_response` 函数.
+- 服务器通过调用 `web` 应用接口程序来把请求传入应用中.
+  ```python
+  iterable = app(environ, start_response)
+  for data in iterable:
+     # send data to client
+  ```
+- 应用程序调用 `start_response` 生成响应头, 并负责生成 `iterable` 中的响应体.
+- 服务器再把响应头和体通过 `HTTP` 返回给客户端.
+
+## 中间件
+- 一个中间件示例, 将下层应用(或中间件)的响应内容改为首字母大写.
+  ```python
+  class Upperware:
+
+    def __init__(self, app):
+        self.wrapped_app = app
+
+    def __call__(self, environ, start_response):
+        response_body = []
+        for data in self.wrapped_app(environ, start_response):
+            response_body.append(data.upper())
+        return response_body
+  ```
+
+## 示例
+- [02-2 WSGI_example.py](./02-2%20WSGI_example.py) 中是应用程序和中间件的简单示例. 可以直接与符合 `WSGI` 标准的服务器组合使用. 例如:
+  ```
+  gunicorn -b localhost:8080 WSGI_example:application
+  ```
+- **要注意**:
+  - 响应需要转换为 `byte` 类型.
+  - 在中间件增加内容后要修改应用返回的 `Content-Length`
+
+## 参考资料
+- [WSGI tutorial](http://wsgi.tutorial.codepoint.net/intro)
+- [An Introduction to the Python Web Server Gateway Interface (WSGI)](http://ivory.idyll.org/articles/wsgi-intro/what-is-wsgi.html)
