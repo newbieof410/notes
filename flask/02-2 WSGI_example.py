@@ -12,7 +12,7 @@ class Middleware:
     def __call__(self, environ, start_response):
 
         response_body = [b'Upper middleware:<br/>']
-        content_lenth = len(response_body[0])
+        content_len = len(response_body[0])
 
         for data in self.app(environ, self.my_start_response):
             response_body.append(data.upper())
@@ -21,7 +21,7 @@ class Middleware:
 
         for header, value in self.headers:
             if header == 'Content-Length':
-                value = str(int(value) + content_lenth)
+                value = str(int(value) + content_len)
             response_headers.append((header, value))
 
         start_response(self.status, response_headers)
