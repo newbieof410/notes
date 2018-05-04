@@ -16,7 +16,9 @@ CONTAINER ID        IMAGE               COMMAND                  CREATED        
 
 `Prometheus` 提供了网页控制台, 可以从这里进入 [http://localhost:9090/graph](http://localhost:9090/graph). 在页面中选择 `Status-->Targets`, 可以看到它默认只配置了对自身运行状态的监测.
 
-## 运行 `node-exporter`
+## 运行 `node_exporter`
+**注意** `node_exporter` 用于收集宿主机的运行数据, 但是这里我们把它运行在容器中, 在默认情况下收集的数据只能反映容器的运行状况.
+
 ```
 docker run -d -p 9100:9100 prom/node-exporter
 ```
