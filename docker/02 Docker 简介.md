@@ -110,7 +110,7 @@ Docker 引擎使用了下面这些 Linux 中的命名空间:
 - `net` 命名空间: 管理网络接口 (NET: Networking)
 - `ipc` 命名空间: 对 IPC 资源的访问管理 (IPC: InterProcess Communication)
 - `mnt` 命名空间: 管理文件系统挂载点 (MNT: Mount)
-- `uts` 命名空间: 隔离内核与版本标识符. (UTS: Unix Timesharing System)
+- `uts` 命名空间: 隔离内核与版本标识符 (UTS: Unix Timesharing System)
 
 ### 控制组
 Linux 上的 Docker 引擎还依赖于另一项叫做控制组 (`cgroups`) 的技术. cgroup 限制了应用程序只能使用特定的资源集合. 控制组使 Docker 引擎可以分享可用的硬件资源给容器, 也可以选择添加限制. 例如, 可以限制特定容器可用的内存.
