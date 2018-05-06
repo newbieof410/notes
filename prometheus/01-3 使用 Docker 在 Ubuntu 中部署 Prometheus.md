@@ -64,7 +64,6 @@ services:
 
 编辑好后 `docker-compose up -d` 启动服务.
 
-
 ### Compose links 配置选项
 文档中提到:
 > Links also express dependency between services in the same way as depends_on, so they determine the order of service startup.
@@ -78,3 +77,108 @@ prometheus_grafana_1         /run.sh                          Up      0.0.0.0:30
 prometheus_node_exporter_1   /bin/node_exporter               Up      9100/tcp              
 prometheus_prometheus_1      /bin/prometheus --config.f ...   Up      0.0.0.0:9090->9090/tcp
 ```
+
+### Networking in Compose
+文档中还指出 `link`  是一个旧的 `Docker` 特性, 可能会被移除, 更推荐我们使用 `networks` 实现容器间的通信. 接下来就看看 `networks` 应该如何使用.
+
+先来看 [Networking in Compose](https://docs.docker.com/compose/networking/) 这篇文档, 里面提到:
+- `Compose` 默认会建立起一个网络, 运行起来的每个容器都会加入到这个网络中
+- 容器间可以使用容器名作为主机名相互访问
+
+据此, 修改我们的 `docker-compose.yml`
+```yml
+version: '3.3'
+services:
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+     - node_exporter
+
+  node_exporter:
+    image: prom/node-exporter
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+     - prometheus
+```
+文件中删除了 `links` 相关的设置, 为了表示容器间的依赖关系, 又将 `depends_on` 加了回来. 启动前, 还需要对 `prometheus.yml` 作一个小的修改:
+```yml
+static_configs:
+  - targets: ['node_exporter:9100']
+```
+这里把别名 `node1` 改为了容器名 `node_exporter`.
+
+启动.
+```
+$ docker-compose up -d
+Creating prometheus_node_exporter_1 ... done
+Creating network "prometheus_default" with the default driver
+Creating prometheus_prometheus_1    ... done
+Creating prometheus_prometheus_1    ...
+Creating prometheus_grafana_1       ... done
+```
+可以看到, 除了容器, 还创建了一个默认的网络.
+
+使用默认网络设置的优点是简单方便, 但也有缺乏灵活性的缺点, 比如就不能设置别名. 不如再照着文档创建一个自定义网络.
+```yml
+version: '3.3'
+services:
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+     - node_exporter
+    networks:
+      promnet:
+        aliases:
+          - prom
+
+  node_exporter:
+    image: prom/node-exporter
+    networks:
+      promnet:
+        aliases:
+          - node
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+     - prometheus
+    networks:
+      - promnet
+
+networks:
+  promnet:
+```
+其中,
+- 最后的 `networks` 创建了一个自定义网络 `promnet`. 只有一个名称, 其余采用默认设置.
+- 在每个服务中, 也使用 `networks` 指定要接入的网络. `aliases` 用于指定在网络中的别名.
+这里把 `node_exporter` 在网络中的别名设置为 `node`, 所以又要修改 `prometheus.yml`
+```yml
+static_configs:
+  - targets: ['node:9100']
+```
+修改 `docker-compose.yml` 文件后, 无需删除旧的容器, 直接 `up` 即可完成更新.
+```
+$ docker-compose up -d
+Creating network "prometheus_promnet" with the default driver
+Recreating prometheus_node_exporter_1 ... done
+Recreating prometheus_prometheus_1 ... done
+Recreating prometheus_grafana_1 ... done
+```
+进入 `Grafana` 配置数据源时, 发现使用容器名或别名都能完成连接.
+
+## 总结
+在这份笔记中, 虽然涉及到了 `Grafana`, 但主要学习的是 `docker-compose` 的配置使用, 又从 `links` 了解到了 `networks`. 整个过程很顺利, 只是在编辑 `yml` 文件时, 可能会由于缩进导致一些小的错误
