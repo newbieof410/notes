@@ -170,6 +170,7 @@ networks:
 static_configs:
   - targets: ['node:9100']
 ```
+
 修改 `docker-compose.yml` 文件后, 无需删除旧的容器, 直接 `up` 即可完成更新.
 ```
 $ docker-compose up -d
@@ -181,4 +182,4 @@ Recreating prometheus_grafana_1 ... done
 进入 `Grafana` 配置数据源时, 发现使用容器名或别名都能完成连接.
 
 ## 总结
-在这份笔记中, 虽然涉及到了 `Grafana`, 但主要学习的是 `docker-compose` 的配置使用, 又从 `links` 了解到了 `networks`. 整个过程很顺利, 只是在编辑 `yml` 文件时, 可能会由于缩进导致一些小的错误
+在这份笔记中, 虽然涉及到了 `Grafana`, 但主要学习的是 `docker-compose` 的配置使用, 又从 `links` 了解到了 `networks`. 整个过程很顺利, 只是在编辑 `yml` 文件时, 可能会由于缩进导致一些小的错误.
