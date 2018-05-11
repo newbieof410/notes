@@ -53,6 +53,12 @@ $ celery worker -A test_celery.celery --loglevel=info
 - `-A test_celery.celery` 指定 `Celery` 实例
 - `--loglevel=info` 设置日志显示级别
 
+如果添加成功, 在输出的 `tasks` 标签下会显示出设置的任务, 如下:
+```
+[tasks]
+  . test_celery.ls
+```
+
 ### 调用 `Celery` 任务
 还是在相同目录下, 进入 `Python` 交互模式, 输入
 ```python
@@ -60,9 +66,11 @@ $ celery worker -A test_celery.celery --loglevel=info
 >>> ret = ls.delay()
 >>> print(ret.result)
 total 8
+...
 ```
 - `delay()` 方法用于调用任务, 返回值是一个 `AsyncResult` 对象.
 - 由 `result` 属性可以得到任务的执行结果.
+- 在相同目录下操作, 是为了使引用路径与设置的任务相同. 比如, 上面设置的任务为 `test_celery.ls`, 引用的语句就为 `from test_celery import ls`, 否则会产生错误 `Received unregistered task of type 'XXX'`
 
 ## 总结
 在 `Celery` 中涉及到许多新的知识需要学习, 这里只大致走了一遍使用流程, 对它有了简单的了解. 内容还要继续补充.
