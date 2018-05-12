@@ -1,5 +1,7 @@
 # Namespace 实验
+下面的一些操作(主要是挂载文件系统), 可能会修改掉系统文件, 所以保险一些的话可以在虚拟机中运行. 在 `Docker` 容器中, 像修改主机名的一些操作是无法执行的.
 ## 程序框架
+后续操作都在这段程序的基础上修改运行.
 ```c
 #define _GNU_SOURCE
 #include <sys/wait.h>
@@ -21,8 +23,7 @@ static int child(void *arg) {
 
 int main(int argc, char *argv[]) {
   printf("Enter main: \n");
-  pid_t pid;
-  pid = clone(child, stack + STACK_SIZE, SIGCHLD, NULL);
+  pid_t pid = clone(child, stack + STACK_SIZE, SIGCHLD, NULL);
   waitpid(pid, NULL, 0);
   printf("Exit main.\n");
   return 0;
@@ -30,7 +31,7 @@ int main(int argc, char *argv[]) {
 ```
 其中,
 - `execv` 第一个参数为可执行文件的路径; 第二个参数为传给可执行文件的运行参数数组, 要以 `NULL` 指针结束. 这行语句的作用是使用 `bash` 打开一层新的 `bash`.
-- `clone` 开启一个新的进程. 第一个参数为子进程执行的方法; 第二个参数为子进程栈空间的地址, 该空间由调用进程分配, 在程序中为 `stack` 数组, 又因为栈空间从高地址向低地址增长, 所以程序中用 `stack + STACK_SIZE` 指向了地址的最高位; 第三个参数设置子进程结束后返回给调用进程的信号, 还有子进程与调用进程间共享的资源; 最后一个参数为传给子进程的参数.
+- `clone` 开启一个新的进程. 第一个参数为子进程执行的方法; 第二个参数为子进程栈空间的地址, 该空间由调用(父)进程分配, 在程序中为 `stack` 数组所在空间, 又因为栈空间从高地址向低地址增长, 所以程序中用 `stack + STACK_SIZE` 指向了地址的最高位; 第三个参数设置子进程结束后返回给调用进程的信号, 还有子进程与调用进程间共享的资源; 最后一个参数为传给子进程的参数.
 - `waitpid` 暂停调用进程, 等待子进程结束.
 
 在实验中通过 `clone` 开启新的 `bash` 进程, 并在第三个参数中设置不同的 `namespace` 选项, 观察效果.
@@ -40,8 +41,7 @@ int main(int argc, char *argv[]) {
 
 修改 `clone` 调用.
 ```c
-  pid_t pid = clone(child, stack + STACK_SIZE,
-    SIGCHLD | CLONE_NEWUTS, NULL);
+  pid_t pid = clone(child, stack + STACK_SIZE, SIGCHLD | CLONE_NEWUTS, NULL);
 ```
 
 编译并执行.
@@ -78,8 +78,7 @@ static int child(void *args) {
 
 int main(int argc, char *argv[]) {
   printf("Enter main. \n");
-  pid_t pid = clone(child, stack + STACK_SIZE,
-    CLONE_NEWUTS | SIGCHLD, NULL);
+  pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWUTS | SIGCHLD, NULL);
   // 省略...
 }
 ```
@@ -111,7 +110,7 @@ key        msqid      owner      perms      used-bytes   messages
 0xa27ae9a8 0          root       644        0            0           
 ```
 
-退出子进程后再次查看.
+退出子进程后再次查看, 是没有子进程做出的修改的.
 ```
 $ ipcs -q
 
@@ -124,11 +123,11 @@ key        msqid      owner      perms      used-bytes   messages
 
 修改 `clone` 调用.
 ```c
-pid_t pid = clone(child, stack + STACK_SIZE,
-  CLONE_NEWUTS | CLONE_NEWPID | SIGCHLD, NULL);
+pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWUTS | CLONE_NEWPID |
+  SIGCHLD, NULL);
 ```
 
-编译运行, 进入子进程, 使用 `echo $$` 查看进程 `ID`.
+编译运行, 进入子进程, 使用 `echo $$` 查看当前进程 `ID`.
 ```
 $ gcc -Wall ns_example.c && sudo ./a.out
 Enter main.
@@ -140,8 +139,58 @@ root@container:~/ns# echo $$
 可以看到进程 `ID` 为 1, 说明创建了子进程空间, 并且是该空间内的第一个进程.
 
 ## Mount namespace
+> Mount namespace 隔离文件系统挂载点. 它是第一个 Linux 命名空间.
 
+**这里遇到问题, 按照下面的步骤在子程序中重新挂载 `/proc` 后会影响到主机文件系统.**
+
+修改 `clone` 调用.
+```c
+  pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWPID | CLONE_NEWNS |
+    CLONE_NEWUTS | SIGCHLD, NULL);
+```
+
+编译运行, 重新挂载 `/proc`, 查看所有进程.
+```
+$ gcc -Wall ns_example.c && sudo ./a.out
+root@container:~/ns# mount -t proc none /proc
+root@container:~/ns# ps ax
+  PID TTY      STAT   TIME COMMAND
+    1 tty1     S      0:00 /bin/bash
+   12 tty1     R+     0:00 ps a
+```
+
+在退出后再次查看仍会提示错误.
+```
+root@container:~/ns# exit
+exit
+Exit main.
+$ ps ax
+Error, do this: mount -t proc proc /proc
+```
+
+## Network namespace
+> Network namespace 会对网络相关的系统资源进行隔离.
+
+修改 `clone` 调用.
+```c
+  pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWNET | CLONE_NEWUTS |
+    SIGCHLD, NULL);
+```
+
+分别在执行前和执行后, 使用 `ip link` 查看网络设备.
+```
+root@container:~/ns# ip link
+1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+```
+进入子程序后, 只列出了一个回环设备, 而且状态为 `DOWN`, 因此要使容器能够连接到网络仍有许多工作要做.
+
+## 总结
+最后还有一个 `user namespace` 用于隔离用户和用户组, 这部分的实验就略过了.
+
+通过前面几个命名空间的操作, 也大概了解了用于隔离的系统调用的使用方法, 知道了在资源隔离中都要考虑哪些方面的内容.
 
 ## 参考阅读
 - Docker 进阶与实战 2.4.2
 - Docker 容器与容器云 3.1.1
+- [Separation Anxiety: A Tutorial for Isolating Your System with Linux Namespaces](https://www.toptal.com/linux/separation-anxiety-isolating-your-system-with-linux-namespaces)
