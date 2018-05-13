@@ -190,6 +190,44 @@ root@container:~/ns# ip link
 
 通过前面几个命名空间的操作, 也大概了解了用于隔离的系统调用的使用方法, 知道了在资源隔离中都要考虑哪些方面的内容.
 
+### Cheet sheet
+```
+#  文件编译
+gcc -Wall <file> [-o output]
+
+# 当前 Shell 进程 ID
+echo $$
+
+# 前一个命令的退出状态码
+echo $?
+
+# 退出当前 Shell
+exit
+
+# vi 撤销与恢复
+u
+ctrl + r
+
+# 查看修改主机名
+hostname
+hostname <new_name>
+
+# 创建, 查看, 删除消息队列
+ipcmk -Q
+ipcs -q
+ipcrm -q <id>
+ipcrm -Q <key>
+
+# 显示所有进程
+ps ax
+
+# mount 将 device 中 type 类型的文件系统挂载到 dir
+mount [-t type] <device> <dir>
+
+# 显示网络设备
+ip link
+```
+
 ## 参考阅读
 - Docker 进阶与实战 2.4.2
 - Docker 容器与容器云 3.1.1
