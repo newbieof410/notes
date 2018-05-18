@@ -173,8 +173,7 @@ ssh: connect to host localhost port 22: Connection refused
   ```
 - 仓库克隆.
   ```
-  $ git remote add origin git@gitserver:/srv/git/project.git
-  $ git push origin master
+  $ git clone git@hostname:/home/git/repo/project.git
   ```
 
 ## 小结
