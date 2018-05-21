@@ -185,13 +185,106 @@ class TaskQueue(Queue):
 结合起来看就明白多了. 首先, 程序运行后最先启动的是主线程, 它不是 `daemon` 线程. 子线程会继承父线程的 `daemon` 属性, 那么在主线程中启动的工作者线程也就不是 `daemon` 线程, 需要在启动前手动设置. 这样在主线程结束时, 子线程也会跟着结束. 如果没有设置子线程为 `daemon`, 最初的版本就是这种情况, 主线程结束后, 子线程还会继续运行.
 
 ### 修改 2
-接着看往下看文档, 有一条提醒, 说 `daemon` 线程结束时可能无法正确地释放资源, 提示
+接着看往下看文档, 有一条提醒, 说 `daemon` 线程结束时可能无法正确地释放资源,
 > Daemon threads are abruptly stopped at shutdown. Their resources (such as open files, database transactions, etc.) may not be released properly. If you want your threads to stop gracefully, make them non-daemonic and use a suitable signalling mechanism such as an Event.
 
+那么就根据提示, 使用 `Event` 来完成退出前的清理工作.
+```python
+# app/task_queue.py
+
+import atexit
+...
+
+class TaskQueue(Queue):
+    ...
+
+    def init_app(self, app):
+        ...
+        atexit.register(self.stop_workers)
+
+    def stop_workers(self):
+        print('stop_workers')
+        for worker in self.workers:
+            worker.stop()
+            worker.join()
+```
+在文件最开头引入了 `atexit`, 我们使用这个模块可以定义程序在正常结束前应该执行哪些操作. 我们的工作线程是在 `init_app` 方法中创建的, 那就在线程创建之后注册一个方法 `stop_workers`, 在程序退出前正确地退出线程. 在 `stop_workers` 方法中, 调用了每个 `worker` 的 `stop` 方法, 通知它们停止运行, 然后又使用了 `join`, 让主线程停下来等待子线程结束.
+
+下面是对 `worker.py` 的修改.
+```python
+# app/worker.py
+...
+
+
+class Worker(threading.Thread):
+
+    def __init__(self):
+        super().__init__()
+        self._stop_event = threading.Event()
+
+    def run(self):
+        while True:
+            if self._stop_event.is_set():
+                break
+            ...
+
+    def stop(self):
+        print('stop')
+        self._stop_event.set()
+```
+原本 `worker` 运行在一个死循环中, 要控制它结束, 就要设置一个标识, 使它在每次执行前先检查该标识, 以判断是否结束运行. 这个标识使用 `Event` 实现.
+
+看起来可以了, 运行程序测试一下吧. 结果会发现命令行中只会输出
+```
+stop_workers
+stop
+```
+但还是结束不了. 使用了多线程后程序的运行顺序不太好追踪, 增加输出语句只是为了帮助理解程序运行到了什么位置. 从输出可以判断出子线程的结束标识是正确设置了的, 但是线程没有结束, 说明没有执行到 `break` 的位置. 仔细检查一遍会发现, 在子线程运行时, 要使用 `get` 操作从队列中取出任务, 如果队列是空的, 就会阻塞下去, 也就无法检查到标识位.
+
+这么做行不通, 也就只好找别的办法了.
+
+### 修改 3
+在 `queue` 的文档中, 有一个使用示例, 直接拿来就可以使用.
+```python
+# app/task_queue.py
+...
+
+class TaskQueue(Queue):
+    ...
+
+    def stop_workers(self):
+        print('stop_workers')
+        for i in range(len(self.workers)):
+            self.put(None)
+        for worker in self.workers:
+            worker.join()
+```
+在上一个修改中, 子线程阻塞在了 `get` 操作的位置, 这里通过 `put(None)` 来解决.
+
+```python
+# app/worker.py
+...
+
+class Worker(threading.Thread):
+
+    def run(self):
+        while True:
+            item = tq.get()
+            if item is None:
+                print('worker stop')
+                break
+        ...
+```
+在程序退出前, 队列中会被插入 `None` 值, 如果子线程处于阻塞状态就能恢复正常运行, 下一步判断到取得的值为 `None`, 随即退出循环. 修改之后就相当于使用 `None` 来作为结束标识.
+
+现在再次测试, 程序应该就能正确退出了.
+
+## 总结
+终于可以在子线程中完成长耗时的后台任务了, 虽然只做了很小的改进, 但也是在多次尝试后才实现了最终的目的. 在问题解决的过程中, 阅读文档起到了非常重要的作用. 同时一边试错, 一边还区分清楚了一个新创建的线程, 与设置为 `daemon` 和使用 `join` 后有什么不同, 很值得了.
 
 ## 参考链接
 - [queue — A synchronized queue class](https://docs.python.org/3.6/library/queue.html)
-- [threading — Thread-based parallelism](https://docs.python.org/3.6/library/threading.html#threading.Thread.join)
+- [threading — Thread-based parallelism](https://docs.python.org/3.6/library/threading.html)
 - [atexit — Exit handlers](https://docs.python.org/3.6/library/atexit.html)
 - [How can I add a background thread to flask?](https://stackoverflow.com/questions/14384739/how-can-i-add-a-background-thread-to-flask)
 - [Is there any way to kill a Thread in Python?](https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread-in-python)
