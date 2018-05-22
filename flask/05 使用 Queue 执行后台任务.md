@@ -41,7 +41,6 @@ class TaskQueue(Queue):
         self.app = app
 
         self.maxsize = app.config.get('MAX_QUEUE_SIZE', 0)
-        self._init(self.maxsize)
 
         for i in range(app.config.get('WORKER_NUMBER', 1)):
             worker = Worker()
@@ -58,7 +57,6 @@ class TaskQueue(Queue):
 
 下面又增加了 `init_app` 方法, 这模仿了一些 `Flask` 拓展的做法. 它们需要应用在实例化后, 调用该方法, 初始化应用, 使应用能与拓展配合工作. 而我们在这个方法中是对队列本身做必要的初始化, 包括: 一, 根据 `app` 的配置修改队列的长度; 二, 启动配置数目的工作线程.
 
-在 `Queue` 的内部使用 `deque` 来表示队列,  它在 `_init()` 中创建, 修改队列长度不能只更改 `maxsize` 属性, 而要再次调用 `_init` 方法重新初始化队列.
 ```python
 class Queue:
     def __init__(self, maxsize=0):
