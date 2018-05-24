@@ -256,5 +256,5 @@ def get(self, block=True, timeout=None):
 - [What is a mutex?](https://stackoverflow.com/a/34558)
 - [deque objects](https://docs.python.org/3.6/library/collections.html#deque-objects)
 - [Context Managers](http://docs.python-guide.org/en/latest/writing/structure/#context-managers)
-- [threading — Thread-based parallelism](threading — Thread-based parallelism)
+- [threading — Thread-based parallelism](https://docs.python.org/3.6/library/threading.html)
 - [queue — A synchronized queue class](https://docs.python.org/3.6/library/queue.html#module-queue)
