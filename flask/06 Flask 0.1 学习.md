@@ -42,14 +42,15 @@ def route(self, rule, **options):
 ```
 `route` 方法会返回一个装饰器, 相当于执行了两个步骤:
 1. 添加 "/" 到 "hello" 的对应关系
-  ```python
-  self.add_url_rule("/", "hello")
-  ```
+    ```python
+    self.add_url_rule("/", "hello")
+    ```
 1. 将 hello 存入 view_functions 字典中, 保存了 "hello" 到 hello 的映射
-  ```python
-  self.view_functions["hello"] = hello
-  ```
+    ```python
+    self.view_functions["hello"] = hello
+    ```
 
+在 `add_url_rule` 中, 会设置 `view` 方法在默认情况下只服务 `GET` 请求. 路由映射会保存在 `url_map` 中, 一条映射至少要包含 `URL rule`, `methods` 和 `endpoint`.
 ```python
 def add_url_rule(self, rule, endpoint, **options):
     options['endpoint'] = endpoint
