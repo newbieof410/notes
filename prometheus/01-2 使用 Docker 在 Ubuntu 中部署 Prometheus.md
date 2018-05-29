@@ -79,4 +79,4 @@ $ docker run -d -p 9090:9090 -v $PWD/prometheus.yml:/etc/prometheus/prometheus.y
 ## 总结
 在这部分内容中, 分别使用了 `--link` 实现容器间的连接, 使用 `-v` 挂载主机中的文件到容器中.
 
-配置过程中如果 [http://localhost:9090/targets](http://localhost:9090/targets) 无法访问, 可以使用 `docker container ls` 检查容器是否正常运行, 使用 `docker logs [容器名]` 查看日志信息.
+配置过程中如果 [http://localhost:9090/targets](http://localhost:9090/targets) 无法访问, 可以使用 `docker container ls` 检查容器是否正常运行, 使用 `docker logs <容器名>` 查看日志信息.
