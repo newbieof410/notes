@@ -25,9 +25,9 @@ def __init__(self, package_name):
     ...
 ```
 `Flask` 搭了一个框架, 使我们只需关注业务逻辑的实现. 后面为空的几个属性就是需要我们实现的部分了.
-- `view_functions` 存储视图方法
-- `error_handlers` 保存错误处理方法
-- `before/after_request_funcs` 在进入视图函数前和视图函数运行结束后执行的方法
+- `view_functions` 存储视图方法;
+- `error_handlers` 保存错误处理方法;
+- `before/after_request_funcs` 在进入视图函数前和视图函数运行结束后执行的方法;
 - `url_map` 使用 `Werkzeug` 提供的 `Map` 对象, 用于存储 `URL` 到处理方法的映射规则.
 
 ## 设置路由
@@ -210,7 +210,25 @@ except Exception, e:
     return handler(e)
 ```
 
+捕获到异常后, 会根据 `HTTP` 响应码查找对应的异常处理方法. 异常处理方法在初始时为空, 可以由我们自定义.
+
+```python
+def errorhandler(self, code):
+    def decorator(f):
+        self.error_handlers[code] = f
+        return f
+    return decorator
+```
+
+`errorhandler` 方法十分简单. 它会返回一个装饰器, 作用只是把自定义的错误处理方法记录到 `error_handlers` 中.
+
+在实现错误处理方法时有一点需要注意: 必须接收异常作为参数. 这可以从调用方法 `handler(e)` 看出, 不论在处理过程中是否使用了该参数.
+
+如果没有找到对应的异常处理方法, 会直接将异常返回. 因为 `HTTPException` 本身即可作为响应对象, 提供了默认的处理方式, 比如返回默认的 404 页面.
+
 ### 构造响应
+
+经过了预处理和请求分发, 最终会得到一个处理结果. 不论这个结果是来自预处理方法, 还是视图方法, 或是异常处理方法, 都需要把它构造为一个响应对象.
 
 ```python
 def make_response(self, rv):
@@ -223,7 +241,7 @@ def make_response(self, rv):
     return self.response_class.force_type(rv, request.environ)
 ```
 
-`make_response` 可以处理四种类型的 `before_request_funcs` 和 `view` 方法的返回值:
+`make_response` 可以处理四种类型的处理结果或返回值:
 1. `response_class` 返回值为响应对象, 不作处理直接返回;
 1. `basestring` 返回值为字符串, 传入 `response_class` 构造响应对象;
 1. `tuple` 返回值为元组, 传入 `response_class` 构造响应对象;
@@ -236,7 +254,70 @@ class BaseResponse(object):
         ...
 ```
 
+在第 3 中情况下, 使用了 `*` 操作符调用初始化方法. 当 `*` 出现在函数调用中时, 作用为解包, 即将作为整体的 `tuple` 或 `list` 中的元素, 一个个拿出来作为位置参数. 上面见过的 `**` 操作符用于将字典拆分为关键字参数.
+
 在这一部分可以看到 `Flask` 对响应的构建过程提供了很大的灵活性, 这种灵活性通过判断参数类型和提供默认值来实现.
+
+### 响应再处理
+在得到响应后, 返回给服务器前, 还需要对响应做再次加工.
+```python
+def process_response(self, response):
+    session = _request_ctx_stack.top.session
+    if session is not None:
+        self.save_session(session, response)
+    for handler in self.after_request_funcs:
+        response = handler(response)
+    return response
+```
+
+#### 保存 session
+首先要从请求上下文中取出 `session` 对象, 它来自于 `open_session` 方法.
+```python
+def open_session(self, request):
+    key = self.secret_key
+    if key is not None:
+        return SecureCookie.load_cookie(request, self.session_cookie_name,
+                                        secret_key=key)
+```
+
+方法中的 `SecureCookie` 来自 `Werkzeug` 工具库. `load_cookie` 作用是将 `cookie` 字符串从请求对象中取出, 反序列化并加载为 `SecureCookie` 对象.
+
+所以, 可以知道 `Flask` 中的 `session` 是使用 `cookie` 技术实现的, 当然也就存储在客户端.
+
+如果使用了 `cookie`, 就需要将 `cookie` 内容附到 `HTTP` 响应头中. 具体来说, 服务端会使用 `Set-Cookie` 首部通知客户端浏览器保存 `cookie` 内容. 相应的, 为使 `cookie` 正常工作, 客户端浏览器必须允许 `cookie` 的使用.
+
+```python
+def save_session(self, session, response):
+    if session is not None:
+        session.save_cookie(response, self.session_cookie_name)
+```
+
+#### 请求后处理
+这一步与请求预处理过程相同. 只是自定义的处理函数需要接收响应对象作为参数, 并返回处理后的响应对象.
+
+### 返回响应
+终于到了最后一步: 返回响应.
+```python
+return response(environ, start_response)
+```
+
+我们已经知道 `response` 是一个对象, 这里能像函数一样使用, 说明它一定是可调用的.
+
+`response` 来自 `Werkzeug` 中的 `Response` 类, 它的一个基类是 `BaseResponse`. 直接找到 `__call__` 方法.
+
+```python
+def __call__(self, environ, start_response):
+    app_iter, status, headers = self.get_wsgi_response(environ)
+    start_response(status, headers)
+    return app_iter
+```
+
+上面做了三件事:
+1. 使用 `get_wsgi_response` 方法得到响应主体内容, 状态及响应头;
+1. 调用 `start_response` 返回状态和响应头;
+1. 返回响应主体.
+
+标准的 `WSGI` 应用执行步骤.
 
 ## 参考资料
 - [What is an 'endpoint' in Flask?](https://stackoverflow.com/a/19262349)
