@@ -190,8 +190,8 @@ root@container:~/ns# ip link
 
 通过前面几个命名空间的操作, 也大概了解了用于隔离的系统调用的使用方法, 知道了在资源隔离中都要考虑哪些方面的内容.
 
-### Cheet sheet
-```
+### Cheet Sheet
+```shell
 #  文件编译
 gcc -Wall <file> [-o output]
 

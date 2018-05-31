@@ -1,7 +1,7 @@
 # 使用 Docker 在 Ubuntu 中部署 Prometheus
 在上一部分中, 使用了 `node_exporter` 容器的 `IP` 地址对 `Prometheus` 作了配置. 这样虽然可以连接成功, 但是容器的地址是动态分配的, 如果重启后地址发生了变化, 之前的配置也就没了作用. 下面就使用一种新的方法连接容器.
 
-## 使用 `--link` 选项
+## 使用 link 选项
 重新运行一个 `node_exporter` 容器, 使用 `--name` 自定义名称, 这里没有使用 `-p` 映射容器端口.
 ```
 $ docker run -d --name node prom/node-exporter
@@ -28,7 +28,7 @@ $ docker exec -it prom vi /etc/prometheus/prometheus.yml
 
 重启后 `$ docker restart prom`, 进入 [http://localhost:9090/targets](http://localhost:9090/targets) 页面查看修改效果.
 
-## 使用 `-v` 选项
+## 使用 v 选项
 容器有自己的独立文件系统, 每次对配置文件的修改都需要进入容器操作, 而且删除容器后, 相应的配置文件也会丢失. 不过, `Docker` 提供了 `volume` 机制, 可以帮助我们把主机里的文件绑定到容器中, 实现主机与容器间的数据共享. 这样就能在容器外编辑保存配置文件了.
 
 先从 `prom` 中把配置文件复制出来.
@@ -80,3 +80,21 @@ $ docker run -d -p 9090:9090 -v $PWD/prometheus.yml:/etc/prometheus/prometheus.y
 在这部分内容中, 分别使用了 `--link` 实现容器间的连接, 使用 `-v` 挂载主机中的文件到容器中.
 
 配置过程中如果 [http://localhost:9090/targets](http://localhost:9090/targets) 无法访问, 可以使用 `docker container ls` 检查容器是否正常运行, 使用 `docker logs <容器名>` 查看日志信息.
+
+### Cheet Sheet
+```shell
+# 运行容器, 自定义容器名
+docker run -d --name custom-name <image>
+
+# 运行容器, 并与另一个容器相连接
+docker run --linke <another-container>:alias <image>
+
+# 运行容器, 将主机文件与容器绑定, 并设置容器读写权限
+docker run -v <host-dir>:<container-dir>[:option]
+
+# 关闭并删除容器
+docker container rm -f <container>
+
+# 查看容器日志
+docker logs <container>
+```

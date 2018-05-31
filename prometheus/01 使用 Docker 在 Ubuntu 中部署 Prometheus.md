@@ -1,6 +1,6 @@
 # 使用 Docker 在 Ubuntu 中部署 Prometheus
 
-## 运行 `Prometheus`
+## 运行 Prometheus
 ```
 docker run -d -p 9090:9090 prom/prometheus
 ```
@@ -16,7 +16,7 @@ CONTAINER ID        IMAGE               COMMAND                  CREATED        
 
 `Prometheus` 提供了网页控制台, 可以从这里进入 [http://localhost:9090/graph](http://localhost:9090/graph). 在页面中选择 `Status-->Targets`, 可以看到它默认只配置了对自身运行状态的监测.
 
-## 运行 `node_exporter`
+## 运行 node_exporter
 **注意** `node_exporter` 用于收集宿主机的运行数据, 但是这里我们把它运行在容器中, 在默认情况下收集的数据只能反映容器的运行状况.
 
 ```
@@ -24,7 +24,7 @@ docker run -d -p 9100:9100 prom/node-exporter
 ```
 通过 [http://localhost:9100/metrics](http://localhost:9100/metrics) 可以查看到它收集到的信息.
 
-## 配置 `Prometheus`
+## 配置 Prometheus
 将新启动的 `node-exporter` 作为 `Prometheus` 的数据抓取对象. 默认情况下, 容器中的 `Prometheus` 配置文件位于 `/etc/prometheus/prometheus.yml`, 现在进入容器修改这个文件.
 
 ```
@@ -72,3 +72,21 @@ $ docker inspect reverent_bassi
 $ docker restart musing_liskov
 ```
 重启后, 再次进入 [http://localhost:9090/targets](http://localhost:9090/targets) 页面, 可以看到新增加了 `node` 抓取对象, 说明配置成功.
+
+## Cheet Sheet
+```shell
+# 运行一个新的容器
+docker run -d -p <host-port>:<container-port> <image>
+
+# 显示运行中的容器
+docker container ls
+
+# 在运行的容器中执行命令
+docker exec -it <container> <cmd> [args]
+
+# 显示容器的详细信息
+docker inspect <container>
+
+# 重启容器
+docker restart <container>
+```

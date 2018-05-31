@@ -183,3 +183,12 @@ Recreating prometheus_grafana_1 ... done
 
 ## 总结
 在这份笔记中, 虽然涉及到了 `Grafana`, 但主要学习的是 `docker-compose` 的配置使用, 又从 `links` 了解到了 `networks`. 整个过程很顺利, 只是在编辑 `yml` 文件时, 可能会由于缩进导致一些小的错误.
+
+### Cheet Sheet
+```shell
+# 启动服务
+docker-compose up -d
+
+# 停止并删除服务
+docker-compose down
+```
