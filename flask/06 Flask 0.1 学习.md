@@ -70,6 +70,7 @@ def add_url_rule(self, rule, endpoint, **options):
     self.url_map.add(Rule(rule, **options))
 ```
 
+### 小结
 程序运行到这里就执行完了用户定义的部分. 可以看到示例程序并没有对 `before/after_request_funcs` 和 `error_handlers` 这两部分作定义, 说明它们并不是必需的.
 
 ## 运行
@@ -334,6 +335,7 @@ def __call__(self, environ, start_response):
 
 标准的 `WSGI` 应用执行步骤.
 
+### 小结
 看到这里, `Flask` 就完成了在一次请求过程中需要做的工作. 然后处理结果会返回到服务器, 由服务器生成响应.
 
 ## 参考资料
