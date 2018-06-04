@@ -143,7 +143,92 @@ traceroute to www.baidu.com (111.13.100.92), 30 hops max, 60 byte packets
 # 在主机中操作
 $ ip r
 default via 115.156.131.254 dev eth0
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1
 ```
+
+此外还可以看到, 目标地址为 `172.17.0.0/16` 的数据包会从 `docker0` 接口发出, 然后就送到对应的容器中了.
+
+
+如果建立了多个网桥, 每个都与主机相连, 那连接在不同网桥上的容器还是能彼此通信, 达不到隔离的效果. 不过, `Docker` 网桥驱动会自动在主机上添加网络规则, 使连接到不同网桥的容器不能直接通信.
+
+## 用户定义网络
+使用 `docker network create` 命令可以创建用户定义网络.
+
+```
+$ docker network create \
+> --subnet=172.18.0.0/16 \
+> --ip-range=172.18.1.0/24 \
+> --gateway=172.18.1.254 \
+> my-net
+```
+在上面的命令中新建了名为 `my-net` 的网络, 并指定了子网号, `IP` 范围和路由地址. 因为没有指定网络驱动, 所以会使用默认的 `bridge`.
+
+查看网络.
+```
+$ docker network ls
+NETWORK ID          NAME                DRIVER              SCOPE
+a5869608ffd1        my-net              bridge              local
+...
+```
+
+查看新增的路由信息.
+```
+$ ip r
+172.18.0.0/16 dev br-a5869608ffd1 proto kernel scope link src 172.18.1.254
+...
+```
+
+删除网络.
+```
+$ docker network rm my-net
+```
+
+## 连接到用户定义网络
+用户定义网络需要显式指定才能连接. 启动一个容器连接到 `my-net`.
+```
+$ docker run -dt --network my-net ubuntu sleep infinity
+```
+
+连接后会创建网桥和以 `veth` 开头的网络接口.
+```
+$ brctl show
+bridge name	bridge id		STP enabled	interfaces
+br-a5869608ffd1		8000.024232663b27	no		vethdec0fbe
+...
+```
+
+断开连接.
+```
+$ docker network disconnect my-net relaxed_yalow
+```
+
+## 用户网络和默认网络的区别
+
+> 下面将用户定义网桥网络和默认网桥网络简称为用户网络和默认网络.
+
+- **用户定义能提供更好的隔离性, 同时容器间可以更好地协作.**
+
+  连接在同一个用户定义网络上的容器彼此间会开放所有的端口, 同时又不会把端口暴露给外界.
+
+  如果使用默认网络, 容器间若要通信就必须使用 `-p` 选项指定端口, 但同时也意味着这个端口可以被外部访问.
+
+- **用户定义网络具有 `DNS` 功能.**
+
+  连接在用户网络上的容器可以使用彼此的容器名或别名通信. 在默认网络中则要使用 `IP` 地址.
+
+- **容器可以在运行中连接或断开用户网络.**
+
+  如果使用默认网络则要重新创建一个容器.
+
+- **每个用户网络都有一个可配置的网桥.**
+
+  默认网络虽然也可以配置, 但修改会影响到所有使用它的容器. 此外, 修改是发生在 `Docker` 之外的.
+
+  使用用户网络就可以对需求不同的一组容器进行定制, 而且 `Docker` 就提供了相应的命令 `docker network create`.
+
+- **在默认网络上使用 `--link` 选项相连接的容器共享环境变量.**
+
+  在用户网络中则要使用其他方式.
 
 ## Cheet Sheet
 ```shell
@@ -152,6 +237,9 @@ $ docker network
 $ docker network ls
 $ docker network rm bridge
 $ docker network inspect bridge
+$ docker network create my-net
+$ docker network connect my-net ubuntu
+$ docker network disconnect my-net ubuntu
 
 # 查看 docker 信息
 $ docker info
