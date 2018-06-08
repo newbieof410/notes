@@ -135,11 +135,37 @@ def setup_periodic_tasks(sender, **kwargs):
 
     CELERY_RESULT_BACKEND                -> result_backend
     ```
-    这是因为从 4.0 版本开始, `Celery` 使用了新的以小写字母组织配置项的方式. 虽然仍支持旧式的配置信息, 但却不允许混合使用. 之前的配置项都放在 `Flask` 配置文件中, 使用的是旧式的大写表示方式, 而上面又使用了小写的 `beat_schedule`, 所以导致了问题. 因而只要统一地改为一种配置方式就可以了.
+    这是因为从 4.0 版本开始, `Celery` 使用了新的以小写字母组织配置项的方式. 虽然仍支持旧式的配置信息, 但却不允许混合使用. 因为所有的配置项都放在 `Flask` 配置文件中, 使用的是旧式的大写表示方式, 而上面又使用了小写的 `beat_schedule`, 所以导致了问题. 因而只要统一地改为一种配置方式就可以了. 不过 `Flask` 中只能使用大写的配置项, 就先统一使用大写的配置方式吧.
 
-    
-- 多队列
-- 优先级
+## 多队列
+所有的任务在触发后都要先进入任务队列等待被处理. 但是在之前的使用中, 我们并没有指出哪一个任务要进入哪一个队列, 或是哪一个 `worker` 负责执行哪一个队列的任务. 这是因为在默认情况下, 会有一个叫 `celery` 的队列被创建出来, 任务默认进入这个队列等待, `worker` 默认为这个队列服务.
+
+如果只有一种任务, 那么使用默认队列就足够了. 可现在任务多了起来, 就需要我们仔细考虑了. 设想这样一个情景, 现在队列中已经有了一些周期性触发的任务, 这时又来了一个新的任务需要被立即执行, 但是只有一条队列, 也就只能让它等在后面. 所以有必要给这种任务开通新的通道.
+
+### 设置任务路由
+像下面这样, `Celery` 中可以为任务设置路由, 指定产生的任务进入哪条队列中.
+```python
+CELERY_ROUTES = {
+    'app.celery_worker.tasks.test': {
+        'queue': 'periodic'
+    }
+}
+```
+在示例中, 给任务指定了 `periodic` 队列. 这个队列开始并不存在, 不过根据默认设置, `Celery` 会把它自动创建出来.
+
+### 启动 worker
+设置了任务路由后, 调度进程的启动方式不受影响.
+
+在启动 `worker` 进程时, 可以选择从哪一条队列接受任务.
+```
+$ celery -A app.celery_worker.celery worker -c 1 -Q periodic --loglevel=info
+```
+
+启动后会显示出队列的信息.
+```
+-------------- [queues]
+               .> periodic         exchange=periodic(direct) key=periodic
+```
 
 ## Cheet Sheet
 ```shell
@@ -151,7 +177,8 @@ $ redis-cli -h rds-srv -p 6379
 
 # 启动 Celery beat 和 worker
 $ celery -A app.celery_worker.celery beat
-$ celery -A app.celery_worker.celery worker -c 1 --loglevel=info
+$ celery -A app.celery_worker.celery worker -c 1
+$ celery -A app.celery_worker.celery worker -Q periodic
 ```
 
 ## 参考资料
@@ -160,4 +187,7 @@ $ celery -A app.celery_worker.celery worker -c 1 --loglevel=info
 - [How to Use Redis with Python 3 and redis-py on Ubuntu 16.04](https://www.fullstackpython.com/blog/install-redis-use-python-3-ubuntu-1604.html)
 - [redis](https://docs.docker.com/samples/library/redis/)
 - [Periodic Tasks](http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html#periodic-tasks)
-- [New lowercase settings](http://docs.celeryproject.org/en/latest/userguide/configuration.html#new-lowercase-settings)
+- [New lowercase settings](http://docs.celeryproject.org/en/master/userguide/configuration.html#new-lowercase-settings)
+- [Using celery with multiple queues, retries and scheduled tasks](https://fernandofreitasalves.com/using-celery-with-multiple-queues-retries-and-scheduled-tasks/)
+- [How to keep multiple independent celery queues?](https://stackoverflow.com/a/21328806)
+- [Routing Tasks](http://docs.celeryproject.org/en/latest/userguide/routing.html#routing-tasks)
