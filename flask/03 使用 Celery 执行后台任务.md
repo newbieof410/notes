@@ -68,7 +68,7 @@ $ celery worker -A test_celery.celery --loglevel=info
 total 8
 ...
 ```
-- `delay()` 方法用于调用任务, 返回值是一个 `AsyncResult` 对象.
+- 在 `delay()` 方法中传入参数调用任务, 返回值是一个 `AsyncResult` 对象.
 - 由 `result` 属性可以得到任务的执行结果.
 - 在相同目录下操作, 是为了使引用路径与设置的任务相同. 比如, 上面设置的任务为 `test_celery.ls`, 引用的语句就为 `from test_celery import ls`, 否则会产生错误 `Received unregistered task of type 'XXX'`
 
