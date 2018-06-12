@@ -120,6 +120,15 @@
   - 响应需要转换为 `byte` 类型.
   - 在中间件增加内容后要修改应用返回的 `Content-Length`
 
+## 相似概念
+- **`uwsgi`**: 是一种 `uWSGI` 使用的二进制协议, 用于数据传输.
+- **`uWSGI`**: 是一个应用服务器, 采用可插拔的架构以支持多语言和平台.
+
+  因为其上开发出来的第一个插件支持的就是 `Python` 中的 `WSGI` 标准, 所以才有了现在的名字.
+
 ## 参考资料
 - [WSGI tutorial](http://wsgi.tutorial.codepoint.net/intro)
 - [An Introduction to the Python Web Server Gateway Interface (WSGI)](http://ivory.idyll.org/articles/wsgi-intro/what-is-wsgi.html)
+- [WSGI vs uWSGi with Nginx](https://stackoverflow.com/a/8691337)
+- [The uwsgi Protocol](http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html)
+- [The uWSGI project](http://uwsgi-docs.readthedocs.io/en/latest/index.html#the-uwsgi-project)
