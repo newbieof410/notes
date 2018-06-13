@@ -21,6 +21,48 @@
 
 在 `CPython` 中, 因为 `GIL` 的存在, 多线程其实也是像 `coroutine` 一样交替执行的, 但却有等多的额外消耗.
 
+## 示例
+定义 `coroutine` 需要使用 `yield` 关键字.
+```python
+def hello():
+   while True:
+       x = yield
+       print('Hello', x)
+```
+
+这个函数看起来很像生成器, 不一样的是 `yield` 位于赋值号右边.
+
+直接调用 `hello` 并不能启动 `coroutine`, 而是会得到生成器对象.
+```python
+>>> h = hello()
+>>> h
+<generator object hello at 0x7f11dd5f3fc0>
+```
+
+启动要使用 `next()` 函数. 启动后会运行到 `yield` 语句位置停止.
+```python
+>>> next(h)
+```
+
+因为 `yield` 后面没有跟任何表达式, 所以不会有产出值. 但是这里却可以使用 `send()` 方法接收调用方发来的值.
+```python
+>>> h.send('Monday')
+Hello Monday
+>>> h.send('world')
+Hello world
+```
+
+接收到 `send()` 参数后, `h` 会恢复运行, 并再次停止在 `yield` 位置. 最后使用 `close()` 方法终止运行.
+```python
+>>> h.close()
+>>> h.send('world')
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+StopIteration
+```
+
 ## 参考资料
 - [What is a coroutine?](https://stackoverflow.com/questions/553704/what-is-a-coroutine)
 - [Difference between a “coroutine” and a “thread”?](https://stackoverflow.com/questions/1934715/difference-between-a-coroutine-and-a-thread)
+- [Coroutines](http://book.pythontips.com/en/latest/coroutines.html)
+- 流畅的 Python
