@@ -143,7 +143,9 @@ Step 14/14 : CMD ["--workers=1", "--bind=0.0.0.0:8000", "manage:app"]
 RuntimeWarning: You're running the worker with superuser privileges: this is
 worker_1  | absolutely not recommended!
 ```
-这是因为默认容器以 `root` 身份运行. 既然不建议, 就使用命令 `USER nobody` 新建了一个普通用户, 后续命令都会在这个用户的权限下执行.
+这是因为默认容器以 `root` 身份运行. 既然不建议, 就使用命令 `USER nobody` 更改了要使用的用户. 后续命令都会在这个用户的权限下执行.
+
+在一般情况下, 更改用户前需要保证用户存在, 如果不存在要使用 `adduser` 创建用户. 因为 `nobody` 是 `UNIX` 系统中的默认用户, 所以可以直接使用. 不过这个用户的权限比较小, 很多操作无法完成.
 
 ### ENTRYPOINT & CMD
 在 `ENTRYPOINT` 中通常指定容器运行后默认执行的指令, 而在 `CMD` 中指定可变的参数.
@@ -199,3 +201,4 @@ services:
 - [Best practices for writing Dockerfiles](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#avoid-installing-unnecessary-packages)
 - [Dockerfile reference](https://docs.docker.com/engine/reference/builder/)
 - [Compose file version 3 reference](https://docs.docker.com/compose/compose-file/)
+- [nobody](https://wiki.ubuntu.com/nobody)
