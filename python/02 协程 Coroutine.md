@@ -39,7 +39,7 @@ def hello():
 <generator object hello at 0x7f11dd5f3fc0>
 ```
 
-启动要使用 `next()` 函数. 启动后会运行到 `yield` 语句位置停止.
+启动要使用 `next()` 函数 (`.send(None)` 也可以). 启动后会运行到 `yield` 语句位置停止.
 ```python
 >>> next(h)
 ```
