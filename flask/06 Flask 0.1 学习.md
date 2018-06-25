@@ -338,6 +338,23 @@ def __call__(self, environ, start_response):
 ### 小结
 看到这里, `Flask` 就完成了在一次请求过程中需要做的工作. 然后处理结果会返回到服务器, 由服务器生成响应.
 
+## 其他
+### Context Stack
+```python
+_request_ctx_stack = LocalStack()
+current_app = LocalProxy(lambda: _request_ctx_stack.top.app)
+request = LocalProxy(lambda: _request_ctx_stack.top.request)
+session = LocalProxy(lambda: _request_ctx_stack.top.session)
+g = LocalProxy(lambda: _request_ctx_stack.top.g)
+```
+
+1. 多个应用组合使用, 多线程
+1. 允许将 `Flask` 实例相关的对象当作全局变量使用
+
+
+
 ## 参考资料
 - [What is an 'endpoint' in Flask?](https://stackoverflow.com/a/19262349)
 - [Understanding kwargs in Python](https://stackoverflow.com/a/1769475)
+- [What is the purpose of Flask's context stacks?](https://stackoverflow.com/questions/20036520/what-is-the-purpose-of-flasks-context-stacks/20041823#20041823)
+- [Flask 的 Context 机制](https://blog.tonyseek.com/post/the-context-mechanism-of-flask/)
