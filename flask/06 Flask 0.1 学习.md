@@ -148,7 +148,7 @@ class _RequestContext(object):
 - `url_adapter` 根据请求上下文进行 `URL` 匹配;
 - `request` 请求对象;
 - `session` 会话对象;
-- `g` 与请求相关的全局变量;
+- `g` 全局变量;
 - `flashes` 提示消息.
 
 在开始执行 `with` 中的代码块之前, 上下文信息会被推入栈中, 执行完后再弹出.
@@ -338,8 +338,27 @@ def __call__(self, environ, start_response):
 ### 小结
 看到这里, `Flask` 就完成了在一次请求过程中需要做的工作. 然后处理结果会返回到服务器, 由服务器生成响应.
 
+`Flask` 大致的处理流程如下.
+<div align="center"> <img src="./img/06-Flask-workflow.png"/> </div><br>
+
 ## 其他
 ### Context Stack
+
+使用 `werkzeug` 提供的中间件, 多个 `Flask` 应用 (甚至和 `Django` 应用) 可以组合起来使用.
+
+```python
+from werkzeug.wsgi import DispatcherMiddleware
+from frontend_app import application as frontend
+from backend_app import application as backend
+
+application = DispatcherMiddleware(frontend, {
+    '/backend':     backend
+})
+```
+
+这时多个应用运行在同一个解释器进程中. 那么问题来了: `Flask` 中有几个特殊的变量可以全局使用, 比如 `current_app` 和 `request`, 它们在使用时和当前的应用紧密相关, 如果我实例化了多个应用, `Flask` 是怎样把这些全局变量与应用对应起来的呢?
+
+从代码中可以看到上下文存储在栈结构中.
 ```python
 _request_ctx_stack = LocalStack()
 current_app = LocalProxy(lambda: _request_ctx_stack.top.app)
@@ -348,8 +367,34 @@ session = LocalProxy(lambda: _request_ctx_stack.top.session)
 g = LocalProxy(lambda: _request_ctx_stack.top.g)
 ```
 
-1. 多个应用组合使用, 多线程
-1. 允许将 `Flask` 实例相关的对象当作全局变量使用
+每当应用被调用时, 处理过程会自动地在当前的上下文中执行.
+```python
+class Flask:
+
+    def __call__(self, environ, start_response):
+        return self.wsgi_app(environ, start_response)
+
+    def wsgi_app(self, environ, start_response):
+        with self.request_context(environ):
+            ...
+```
+
+再回到多应用的情形, 即使是在同一个进程中, 当需要哪个应用处理时, 就把那个应用的上下文压入栈中, 后面再使 `current_app` 等全局变量时, 它们会由栈顶获取信息, 得到的自然是当前应用的上下文.
+
+<div align="center"> <img src="./img/06-Flask-stack.png"/> </div><br>
+
+正因为这样, 我们在编写视图函数时才不需要关注上下文栈的存在, 可以直接使用上面的全局变量.
+
+但是在另外一些情况下, 应用不是以 `WGSI` 应用的形式被调用的, 它不处在一个请求响应循环中, 这时就需要手动管理上下文. 例如:
+- 在命令行中操作应用的数据库;
+- 在后台线程中更新应用数据库;
+- 在测试中模拟请求.
+
+在 `0.1` 版本中只有一个请求上下文栈, 而在后续的更新中又进一步划分出应用上下文, 分别存储不同层面的信息.
+- 请求上下文: `HTTP` 请求相关数据;
+- 应用上下文: 数据库连接, 应用配置等应用层数据.
+
+应用上下文可以单独使用, 而在使用请求上下文时会推入一个对应的应用上下文.
 
 
 
@@ -358,3 +403,4 @@ g = LocalProxy(lambda: _request_ctx_stack.top.g)
 - [Understanding kwargs in Python](https://stackoverflow.com/a/1769475)
 - [What is the purpose of Flask's context stacks?](https://stackoverflow.com/questions/20036520/what-is-the-purpose-of-flasks-context-stacks/20041823#20041823)
 - [Flask 的 Context 机制](https://blog.tonyseek.com/post/the-context-mechanism-of-flask/)
+- [Application Dispatching](http://flask.pocoo.org/docs/1.0/patterns/appdispatch/#application-dispatching)
