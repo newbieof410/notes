@@ -396,6 +396,106 @@ class Flask:
 
 应用上下文可以单独使用, 而在使用请求上下文时会推入一个对应的应用上下文.
 
+### Local Objects
+
+栈的使用保证了多应用组合工作时上下文不至于混乱. 现在考虑另一个问题: 在多线程的环境下, 每个请求交给一个应用线程去处理, 而像 `request` 等全局变量对每个线程都是可见的, 那要如何保证每个线程拿到的 `request` 都是自己的?
+
+`Flask` 应用当然可以多线程工作, 同时上下文能得到有序管理, 这依靠的是它所使用的 `LocalStack` 对象. 而 `LocalStack` 又依赖于 `Local` 对象, 所以就先来看看它是如何定义的.
+
+```python
+class Local(object):
+    __slots__ = ('__storage__', '__ident_func__')
+
+    def __init__(self):
+        object.__setattr__(self, '__storage__', {})
+        object.__setattr__(self, '__ident_func__', get_ident)
+
+    def __getattr__(self, name):
+        try:
+            return self.__storage__[self.__ident_func__()][name]
+        except KeyError:
+            raise AttributeError(name)
+
+    def __setattr__(self, name, value):
+        ident = self.__ident_func__()
+        storage = self.__storage__
+        try:
+            storage[ident][name] = value
+        except KeyError:
+            storage[ident] = {name: value}
+
+    def __delattr__(self, name):
+        try:
+            del self.__storage__[self.__ident_func__()][name]
+        except KeyError:
+            raise AttributeError(name)
+
+    ...
+```
+`Local` 中有一个字典用于存储各线程的数据, 数据存放在当前线程的 `id` 下. 取数据时, 先由 `get_ident` 方法获取 `id`, 再根据 `id` 使用自己的存储空间.
+
+所以 `Local` 对象就像一个公共的储物柜, 每个线程都有一把钥匙, 使用这把钥匙只能打开自己的柜子.
+
+<div align="center"> <img src="./img/06-LocalStack.png" width="500"/> </div><br>
+
+说起来有些麻烦, 但使用起来却很方便, 因为每个线程的空间是 `Local` 帮我们找到的, 使我们可以像操作普通对象一样操作 `Local` 中的属性.
+
+为了实现这个效果, `Local` 中重写了 `__setattr__()` 和 `__getattr__()` 方法. 在设置属性或获取属性时就是调用的这两个方法.
+
+```Python
+lcl = Local()
+lcl.name = 'Atom' # Equals to lcl.__setattr__('name', 'Atom')
+print(lcl.name) # Equals to print(lcl.__getattr__('name'))
+```
+
+默认情况下, 实例的属性存储在 `__dict__` 字典中, 而在 `Local` 中换了一个名字, 叫 `__storage__`. 不过 `__storage__` 本身也是对象的一个属性, 总不能自己存在自己里面, 而且它应该是为所有线程共同访问的, 所以在初始化时要使用默认的方法设置这个属性.
+
+判断当前 "线程" 有两种方法. 如果使用了 `greenlet`, 就使用它的 `id`, 否则使用 `thread` 的 `id`.
+```Python
+try:
+    from greenlet import getcurrent as get_ident
+except ImportError:
+    try:
+        from thread import get_ident
+    except ImportError:
+        from _thread import get_ident
+```
+
+再看 `LocalStack` 就明白了. 在它的内部有一个 `Local` 对象, 每个线程都在公共的 `Local` 中保存自己的上下文栈, 从而实现了线程间上下文的隔离.
+
+还可以看到栈只不过是用列表来存储的.
+```Python
+class LocalStack(object):
+
+    def __init__(self):
+        self._local = Local()
+
+    def push(self, obj):
+        rv = getattr(self._local, 'stack', None)
+        if rv is None:
+            self._local.stack = rv = []
+        rv.append(obj)
+        return rv
+
+    def pop(self):
+        stack = getattr(self._local, 'stack', None)
+        if stack is None:
+            return None
+        elif len(stack) == 1:
+            release_local(self._local)
+            return stack[-1]
+        else:
+            return stack.pop()
+
+    @property
+    def top(self):
+        try:
+            return self._local.stack[-1]
+        except (AttributeError, IndexError):
+            return None
+
+    ...
+```
 
 
 ## 参考资料
