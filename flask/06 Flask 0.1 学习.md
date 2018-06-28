@@ -554,7 +554,7 @@ class LocalProxy(object):
     ...
 ```
 
-再来图示理解 `LocalProxy` 的作用.
+再来通过图示理解 `LocalProxy` 的作用.
 <div align="center"> <img src="./img/06-LocalProxy.png"/> </div><br>
 
 ### 小结
