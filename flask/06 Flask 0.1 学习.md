@@ -338,7 +338,7 @@ def __call__(self, environ, start_response):
 ### 小结
 看到这里, `Flask` 就完成了在一次请求过程中需要做的工作. 然后处理结果会返回到服务器, 由服务器生成响应.
 
-`Flask` 大致的处理流程如下.
+可以得到 `Flask` 大致的处理流程如下.
 <div align="center"> <img src="./img/06-Flask-workflow.png"/> </div><br>
 
 ## 其他
@@ -436,7 +436,7 @@ class Local(object):
 
 所以 `Local` 对象就像一个公共的储物柜, 每个线程都有一把钥匙, 使用这把钥匙只能打开自己的柜子.
 
-<div align="center"> <img src="./img/06-LocalStack.png" width="500"/> </div><br>
+<div align="center"> <img src="./img/06-LocalStack.png"/> </div><br>
 
 说起来有些麻烦, 但使用起来却很方便, 因为每个线程的空间是 `Local` 帮我们找到的, 使我们可以像操作普通对象一样操作 `Local` 中的属性.
 
@@ -497,6 +497,89 @@ class LocalStack(object):
     ...
 ```
 
+### Local Proxy
+
+我们已经知道了应用的上下文存储在栈结构中, 而且每个线程中的栈都是隔离的, 不会相互影响. 最后, 再来看看用于表示全局变量的 `LocalProxy` 又是怎么设计的.
+
+```Python
+current_app = LocalProxy(lambda: _request_ctx_stack.top.app)
+request = LocalProxy(lambda: _request_ctx_stack.top.request)
+session = LocalProxy(lambda: _request_ctx_stack.top.session)
+g = LocalProxy(lambda: _request_ctx_stack.top.g)
+```
+
+在全局变量的定义中使用了匿名函数作为参数, 作用是从上下文栈顶取出实际操作的对象.
+
+```Python
+class LocalProxy(object):
+
+    __slots__ = ('__local', '__dict__', '__name__', '__wrapped__')
+
+    def __init__(self, local, name=None):
+        object.__setattr__(self, '_LocalProxy__local', local)
+        object.__setattr__(self, '__name__', name)
+        if callable(local) and not hasattr(local, '__release_local__'):
+            # "local" is a callable that is not an instance of Local or
+            # LocalManager: mark it as a wrapped function.
+            object.__setattr__(self, '__wrapped__', local)
+```
+在类属性 `__slots__` 中定义了一个实例属性 `__local`, 而在初始化方法中却设置了 `_LocalProxy__local`, 这两个其实指的是同一个属性. 这是 `Python` 的语言特性, 叫做 `name mangling`, 为避免这一类属性意外被外部修改增加了一层保护.
+
+在使用全局变量时, 比如 `current_app`, 操作的并不是真正的 `Flask` 应用对象, 而是 `app` 的一个代理. 代理再通过初始化时提供的方法, 实时地找到当前上下文中实际被操作的对象. 就保证了不同的应用实例在处理时, 通过 `current_app` 能得到正确的应用实例.
+
+对代理的大部分操作都会转发到实际的操作对象上去, 所以代理基本可以当作实际要操作的对象一样使用.
+
+```Python
+    def _get_current_object(self):
+        if not hasattr(self.__local, '__release_local__'):
+            return self.__local()
+        try:
+            return getattr(self.__local, self.__name__)
+        except AttributeError:
+            raise RuntimeError('no object bound to %s' % self.__name__)
+
+    @property
+    def __dict__(self):
+        try:
+            return self._get_current_object().__dict__
+        except RuntimeError:
+            raise AttributeError('__dict__')
+
+    ...
+
+    __setattr__ = lambda x, n, v: setattr(x._get_current_object(), n, v)
+    __delattr__ = lambda x, n: delattr(x._get_current_object(), n)
+    __str__ = lambda x: str(x._get_current_object())
+
+    ...
+```
+
+再来图示理解 `LocalProxy` 的作用.
+<div align="center"> <img src="./img/06-LocalProxy.png"/> </div><br>
+
+### 小结
+简单总结一下三种 `Local` 对象的作用.
+
+- `Local`
+
+  使全局变量在多线程环境下能被安全使用. 具体做法是在存取数据时判断当前所在的线程, 然后获取对应线程的数据.
+
+  这里的线程既可以是常规线程, 也可以是 `greenlet`.
+
+  根据线程 `id` 取值有一个缺点: 后来的使用者数据会被之前的使用者数据污染. 所以在更换使用者时要主动清空遗留的数据.
+
+- `LocalStack`
+
+  建立在 `Local` 上的栈结构.
+
+- `LocalProxy`
+
+  `Local` 的代理, 会把操作转发到实际的对象上去.
+
+  多个代理可以共用一个 `Local` 存储数据, 方便管理.
+
+  另外可以通过可调用对象初始化代理, 告诉它如何找到实际操作的对象.
+
 
 ## 参考资料
 - [What is an 'endpoint' in Flask?](https://stackoverflow.com/a/19262349)
@@ -504,3 +587,5 @@ class LocalStack(object):
 - [What is the purpose of Flask's context stacks?](https://stackoverflow.com/questions/20036520/what-is-the-purpose-of-flasks-context-stacks/20041823#20041823)
 - [Flask 的 Context 机制](https://blog.tonyseek.com/post/the-context-mechanism-of-flask/)
 - [Application Dispatching](http://flask.pocoo.org/docs/1.0/patterns/appdispatch/#application-dispatching)
+- [Flask 源码解析: 上下文](http://cizixs.com/2017/01/13/flask-insight-context)
+- [Context Locals](http://werkzeug.pocoo.org/docs/0.14/local/)
