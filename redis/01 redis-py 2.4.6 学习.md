@@ -81,3 +81,49 @@ class Connection(object):
         self._sock = None
         self._parser = parser_class()
 ```
+
+`Connection` 使用 `TCP` 连接服务器.
+```python
+    def connect(self):
+        "Connects to the Redis server if not already connected"
+        if self._sock:
+            return
+        try:
+            sock = self._connect()
+        except socket.error, e:
+            raise ConnectionError(self._error_message(e))
+
+        self._sock = sock
+        self.on_connect()
+
+    def _connect(self):
+        "Create a TCP socket connection"
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(self.socket_timeout)
+        sock.connect((self.host, self.port))
+        return sock
+```
+
+连接创建成功后要执行 `on_connect()` 方法, 进行密码认证和数据库选择.
+
+```python
+def on_connect(self):
+    "Initialize the connection, authenticate and select a database"
+    self._parser.on_connect(self)
+
+    # if a password is specified, authenticate
+    if self.password:
+        self.send_command('AUTH', self.password)
+        if self.read_response() != 'OK':
+            raise ConnectionError('Invalid Password')
+
+    # if a database is specified, switch to it
+    if self.db:
+        self.send_command('SELECT', self.db)
+        if self.read_response() != 'OK':
+            raise ConnectionError('Invalid Database')
+```
+
+同一个客户端对象可以安全地使用在多个线程中, 因为客户端不提供会改变自身状态的操作. 所以在这里设置数据库后就不能修改了.
+
+服务端发来的消息会交给 `Parser` 对象解析, 需要把 `socket` 连接提供过去.
