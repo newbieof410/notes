@@ -107,23 +107,59 @@ class Connection(object):
 连接创建成功后要执行 `on_connect()` 方法, 进行密码认证和数据库选择.
 
 ```python
-def on_connect(self):
-    "Initialize the connection, authenticate and select a database"
-    self._parser.on_connect(self)
+    def on_connect(self):
+        "Initialize the connection, authenticate and select a database"
+      self._parser.on_connect(self)
 
-    # if a password is specified, authenticate
-    if self.password:
-        self.send_command('AUTH', self.password)
-        if self.read_response() != 'OK':
-            raise ConnectionError('Invalid Password')
+      # if a password is specified, authenticate
+      if self.password:
+          self.send_command('AUTH', self.password)
+          if self.read_response() != 'OK':
+              raise ConnectionError('Invalid Password')
 
-    # if a database is specified, switch to it
-    if self.db:
-        self.send_command('SELECT', self.db)
-        if self.read_response() != 'OK':
-            raise ConnectionError('Invalid Database')
+      # if a database is specified, switch to it
+      if self.db:
+          self.send_command('SELECT', self.db)
+          if self.read_response() != 'OK':
+              raise ConnectionError('Invalid Database')
 ```
 
 同一个客户端对象可以安全地使用在多个线程中, 因为客户端不提供会改变自身状态的操作. 所以在这里设置数据库后就不能修改了.
 
 服务端发来的消息会交给 `Parser` 对象解析, 需要把 `socket` 连接提供过去.
+
+## Parser
+
+`Parser` 类用于解析服务端返回的数据.
+
+这里有两个 `Parser` 实现:
+- `PythonParser` 由 `Python` 实现;
+- `HiredisParser` 由 `C` 实现, 提供了到 `Python` 的绑定, 需要额外安装 `hiredis` 包.
+
+客户端会优先使用速度更快的 `HiredisParser`.
+```python
+try:
+    import hiredis
+    DefaultParser = HiredisParser
+except ImportError:
+    DefaultParser = PythonParser
+```
+
+## RESP
+现在通过客户端发送一个命令.
+
+```python
+redis.set('foo', 'bar')
+```
+
+命令 `SET foo bar` 在 `Connection` 对象中会先被序列化为 `*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar` 再发出.
+
+```python
+class Connection(object):
+
+    def pack_command(self, *args):
+        "Pack a series of arguments into a value Redis command"
+        command = ['$%s\r\n%s\r\n' % (len(enc_value), enc_value)
+                   for enc_value in imap(self.encode, args)]
+        return '*%s\r\n%s' % (len(command), ''.join(command))
+```
