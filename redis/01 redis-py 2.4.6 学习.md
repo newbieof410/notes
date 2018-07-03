@@ -146,13 +146,38 @@ except ImportError:
 ```
 
 ## RESP
+
+### 简介
+
+客户端与服务器之间的通信数据使用 `RESP` 协议 (REdis Serizlization Protocol) 序列化.
+
+`RESP` 可以表示多种数据类型, 数据类型由第一个字节判断.
+
+数据类型 | 第一个字节 | 规定 | 示例
+--- | --- | --- | ---
+`Simple String` | `+` | 字符串中不能有回车换行符 | `+OK\r\n`
+`Error` | `-` | 与简单字符串类似 | `-Error message\r\n`
+`Integer` | `:` | | `:10\r\n`
+`Bulk String` | `$` | `$` 后接一个表示字符串长度的数字 | `$6\r\nfoobar\r\n`
+`Array` | `*` | `*` 后接表示数组元素个数的数字 | `*0\r\n`
+
+序列化数据的每一部分间使用 `\r\n` 分隔.
+
+另外, 空值可以使用 `Bulk String` 或 `Array` 表示:
+- Null Bulk String `$-1\r\n`
+- Null Array `*-1\r\n`
+
+`Array` 中的每一项可以是任意的数据类型. 而请求数据虽然要被表示为 `Array`, 但其中的每一项都必须是 `Bulk String`. 响应则没有类型限制.
+
+### 发送请求
+
 现在通过客户端发送一个命令.
 
 ```python
 redis.set('foo', 'bar')
 ```
 
-命令 `SET foo bar` 在 `Connection` 对象中会先被序列化为 `*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar` 再发出.
+命令 `SET foo bar` 会交由 `Connection` 对象完成序列化: `*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar`.
 
 ```python
 class Connection(object):
@@ -163,3 +188,78 @@ class Connection(object):
                    for enc_value in imap(self.encode, args)]
         return '*%s\r\n%s' % (len(command), ''.join(command))
 ```
+
+在这个方法中, 命令和参数首先会被表示为 `Bulk String`, 然后再组合为 `Array`.
+
+```
+SET --> $3\r\nSET\r\n
+foo --> $3\r\nfoo\r\n
+bar --> $3\r\nbar\r\n
+```
+
+### 接收响应
+
+发出请求后使用 `Parser` 对象读取响应. `SET` 执行成功后应该会得到 `+OK\r\n`.
+
+```python
+    def read(self, length=None):
+
+        try:
+            if length is not None:
+                return self._fp.read(length+2)[:-2]
+            return self._fp.readline()[:-2]
+        except (socket.error, socket.timeout), e:
+            raise ConnectionError("Error while reading from socket: %s" % \
+                (e.args,))  
+```
+
+因为指令由 `\r\n` 分隔, 当没有指定读取字节数时, 可以使用 `readline()` 读取第一行的数据, 当指定了长度时, 则读取相应数量的字节. 然后再丢掉数据末尾的 `\r\n`.
+
+经过处理后会得到 `+OK`.
+
+```python
+    def read_response(self):
+        response = self.read()
+        if not response:
+            raise ConnectionError("Socket closed on remote end")
+
+        byte, response = response[0], response[1:]
+
+        # server returned an error
+        if byte == '-':
+            if response.startswith('ERR '):
+                response = response[4:]
+                return ResponseError(response)
+            if response.startswith('LOADING '):
+                # If we're loading the dataset into memory, kill the socket
+                # so we re-initialize (and re-SELECT) next time.
+                raise ConnectionError("Redis is loading data into memory")
+        # single value
+        elif byte == '+':
+            return response
+        # int value
+        elif byte == ':':
+            return long(response)
+        # bulk response
+        elif byte == '$':
+            length = int(response)
+            if length == -1:
+                return None
+            response = self.read(length)
+            return response
+        # multi-bulk response
+        elif byte == '*':
+            length = int(response)
+            if length == -1:
+                return None
+            return [self.read_response() for i in xrange(length)]
+        raise InvalidResponse("Protocol Error")
+```
+
+这一部分是 `PythonParser` 对响应的解析过程. 首先, 读取一行数据, 拿到第一个字节. 如果类型对应是错误, 简单字符串或整数, 则进行一定的类型转换即可返回. 如果类型是多行字符串, 则再读取字符串长度的字节. 如果是数组, 则要递归上述过程, 将结果以列表的形式返回.
+
+这里直接将 `OK` 返回给上层方法.
+
+## 参考资料
+- [redis-py](https://github.com/andymccurdy/redis-py#redis-py)
+- [Redis Protocol specification](https://redis.io/topics/protocol)
