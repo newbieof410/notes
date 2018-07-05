@@ -44,6 +44,7 @@
 - [02 协程 Coroutine.md](./python/02%20协程%20Coroutine.md)
 - [03 socket 基础.md](./python/03%20socket%20基础.md)
 - [04 Bitwise Operation.md](./python/04%20Bitwise%20Operation.md)
+- [05 Python 程序是如何运行起来的.md](./python/05%20Python%20程序是如何运行起来的.md)
 
 ## redis
 
