@@ -1,5 +1,13 @@
 # Bridge 网络
 
+`network namespace` 隔离了主机和容器间网络设备, 协议栈, 套接字, 路由表等网络资源. 而容器若要与主机或外界通信就要在自己的网络命令空间与主机的网络命名空间之间建立桥梁. 这可以使用虚拟以太网设备 `veth` 实现.
+
+`veth` 总是被成对创建, 就像连接两个网络命名空间的管道, 从一头发出的数据包会被另一头收到. 在主机端的 `veth` 设备默认又连接在虚拟网桥 `docker0` 上, 它将容器网段和主机连接在了一起. 同时, `docker0` 还作为容器的默认网关.
+
+容器与外界沟通的数据包最终要通过与外网连接的真实网卡发出.
+
+<div align="center"> <img src="./img/06-Bridge-Network.png" width="500"/> </div><br>
+
 ## 总览
 `Docker` 在安装后会自动创建三种网络.
 1.  查看 `Docker` 网络,
@@ -284,3 +292,4 @@ $ sleep infinity
 - [Why IP address for Linux Bridge which is layer 2 virtual device?](https://unix.stackexchange.com/questions/153281/why-ip-address-for-linux-bridge-which-is-layer-2-virtual-device)
 - [How To Use Ip Command In Linux with Examples](https://linoxide.com/linux-command/use-ip-command-linux/)
 - [Networking with standalone containers](https://docs.docker.com/network/network-tutorial-standalone/)
+- Docker 容器与容器云 第 2 版
