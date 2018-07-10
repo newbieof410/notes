@@ -30,6 +30,7 @@
 - [01-1 libvirt.md](./libvirt/01-1%20libvirt.md)
 - [01-2 domain_example.xml](./libvirt/01-2%20domain_example.xml)
 - [02 libvirt snapshots.md](./libvirt/02%20libvirt%20snapshots.md)
+- [03 Libvirt 在 Ceilometer 中的应用.md](./libvirt/03%20Libvirt%20在%20Ceilometer%20中的应用.md)
 
 ## prometheus
 
