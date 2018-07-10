@@ -149,20 +149,19 @@ class NoDataException(InspectorException):
       virDomain.info
     </td>
     <td>
-      返回值类型为列表, 含义如下:
-
+    返回值类型为列表, 含义如下:
       <ul>
         <li>
-        **state** the running state, one of virDomainState
+        running state, one of virDomainState
         </li>
         <li>
-        **maxMem** the maximum memory in KBytes allowed
+        maximum memory in KBytes allowed
         <li>
-        **memory** the memory in KBytes used by the domain
+        the memory in KBytes used by the domain
         <li>
-        **nrVirtCpu** the number of virtual CPUs for the domain
+        the number of virtual CPUs for the domain
         <li>
-        **cpuTime** the CPU time used in nanoseconds
+        the CPU time used in nanoseconds
       </ul>
     </td>
     <td>
