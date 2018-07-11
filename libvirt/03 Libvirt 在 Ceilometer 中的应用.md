@@ -51,10 +51,10 @@ LIBVIRT_PER_TYPE_URIS = dict(uml='uml:///system', xen='xen:///', lxc='lxc:///')
 
 在这一部分使用到的 `libvirt` 方法:
 
-方法 | 返回值 | C API 文档 | C API 方法
------ | ------- | ----- | ---
-virConnect.isAlive | 1 if alive, 0 if dead | host | virConnectIsAlive
-openReadOnly | virConnect 对象 | host | virConnectOpenReadOnly
+方法 | 返回值 | C API
+----- | ------- | -----
+virConnect.isAlive | 类型: int </br>含义:1 if alive, 0 if dead | host:</br> virConnectIsAlive
+openReadOnly | 类型: virConnect | host:</br> virConnectOpenReadOnly
 
 ## 获取 domain
 
@@ -128,20 +128,17 @@ class NoDataException(InspectorException):
     <th>方法</th>
     <th>返回值</th>
     <th>C API 文档</th>
-    <th>C API 方法</th>
   </tr>
   <tr>
     <td>
       virConnect.lookupByUUIDString
     </td>
     <td>
-      virDomain
+      类型: virDomain
     </td>
     <td>
-      domain  
-    </td>
-    <td>
-      virDomainGetInfo  
+      domain:</br>
+      virDomainLookupByUUIDString
     </td>
   </tr>
   <tr>
@@ -149,30 +146,144 @@ class NoDataException(InspectorException):
       virDomain.info
     </td>
     <td>
-    返回值类型为列表, 含义如下:
-      <ul>
-        <li>
-        running state, one of virDomainState
-        </li>
-        <li>
-        maximum memory in KBytes allowed
-        <li>
-        the memory in KBytes used by the domain
-        <li>
-        the number of virtual CPUs for the domain
-        <li>
-        the CPU time used in nanoseconds
-      </ul>
+      类型: list</br>
+      含义:
+        <ul>
+          <li>
+          running state, one of virDomainState
+          </li>
+          <li>
+          maximum memory in KBytes allowed
+          <li>
+          the memory in KBytes used by the domain
+          <li>
+          the number of virtual CPUs for the domain
+          <li>
+          the CPU time used in nanoseconds
+        </ul>
     </td>
     <td>
-      domain
-    </td>
-    <td>
+      domain:</br>
       virDomainGetInfo
     </td>
   </tr>
 </table>
 
+## 获取网络接口信息
+
+```python
+    @libvirt_utils.retry_on_disconnect
+    def inspect_vnics(self, instance, duration):
+        domain = self._get_domain_not_shut_off_or_raise(instance)
+
+        tree = etree.fromstring(domain.XMLDesc(0))
+        for iface in tree.findall('devices/interface'):
+            target = iface.find('target')
+            if target is not None:
+                name = target.get('dev')
+            else:
+                continue
+            mac = iface.find('mac')
+            if mac is not None:
+                mac_address = mac.get('address')
+            else:
+                continue
+            fref = iface.find('filterref')
+            if fref is not None:
+                fref = fref.get('filter')
+
+            params = dict((p.get('name').lower(), p.get('value'))
+                          for p in iface.findall('filterref/parameter'))
+            dom_stats = domain.interfaceStats(name)
+            yield virt_inspector.InterfaceStats(name=name,
+                                                mac=mac_address,
+                                                fref=fref,
+                                                parameters=params,
+                                                rx_bytes=dom_stats[0],
+                                                rx_packets=dom_stats[1],
+                                                rx_errors=dom_stats[2],
+                                                rx_drop=dom_stats[3],
+                                                tx_bytes=dom_stats[4],
+                                                tx_packets=dom_stats[5],
+                                                tx_errors=dom_stats[6],
+                                                tx_drop=dom_stats[7])
+```
+
+`domain` 的网络接口设备通过解析 `xml` 文件得到, 使用的解析工具包为 `lxml`.
+
+接口必须具备设备名称和 `mac` 地址, 然后通过设备名称得到接口运行数据.
+
+方法中使用了 `yield` 关键字, 以生成器的方式返回数据. 返回值中包含许多字段, 这里使用了 `namedtuple` 来区分字段含义.
+
+```python
+InterfaceStats = collections.namedtuple('InterfaceStats',
+                                        ['name', 'mac', 'fref', 'parameters',
+                                         'rx_bytes', 'tx_bytes',
+                                         'rx_packets', 'tx_packets',
+                                         'rx_drop', 'tx_drop',
+                                         'rx_errors', 'tx_errors'])
+```
+
+下面为本部分用到的 `libvirt` 方法:
+
+<table>
+  <tr>
+    <th>方法</th>
+    <th>返回值</th>
+    <th>C API</th>
+  </tr>
+  <tr>
+    <td>
+      virDomain.interfaceStats
+    </td>
+    <td>
+      类型: tuple</br>
+      含义:
+      <ul>
+        <li>
+        	rx_bytes
+        </li>
+        <li>
+        	rx_packets
+        </li>
+        <li>
+        	rx_errs
+        </li>
+        <li>
+        	rx_drop
+        </li>
+        <li>
+        	tx_bytes
+        </li>
+        <li>
+        	tx_packets
+        </li>
+        <li>
+        	tx_errs
+        </li>
+        <li>
+        	tx_drop
+        </li>
+    </td>
+    <td>
+      domain:</br>
+      virDomainInterfaceStats
+    </td>
+  </tr>
+  <tr>
+    <td>
+      virDomain.XMLDesc
+    </td>
+    <td>
+      类型: str</br>
+      含义: domain 的 xml 描述
+    </td>
+    <td>
+      domain:</br>
+      virDomainGetXMLDesc
+    </td>
+  </tr>
+</table>
 
 ## 参考资料
 
