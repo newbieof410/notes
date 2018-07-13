@@ -29,7 +29,7 @@ def refresh_libvirt_connection(conf, klass):
     return connection
 ```
 
-在 `refresh_libvirt_connection` 方法中, 首先会尝试在 `inspector` 对象的 `_libvirt_connection` 属性中获取连接并检查连接是否可用, 只有在没有可用连接时才去创建.
+在 `refresh_libvirt_connection` 方法中, 首先会尝试在 `inspector` 对象的 `_libvirt_connection` 属性中获取连接并检查连接是否可用, 只有在没有可用连接时才新建连接.
 
 ```python
 def new_libvirt_connection(conf):
@@ -41,7 +41,7 @@ def new_libvirt_connection(conf):
     return libvirt.openReadOnly(uri)
 ```
 
-创建新连接使用的 `uri` 由配置中获取, 或者根据虚拟机管理器类型使用默认值.
+创建连接使用的 `uri` 由配置中获取, 或者根据虚拟机管理器类型使用默认值.
 
 ```python
 LIBVIRT_PER_TYPE_URIS = dict(uml='uml:///system', xen='xen:///', lxc='lxc:///')
@@ -94,7 +94,9 @@ openReadOnly | 类型: virConnect | host:<br> virConnectOpenReadOnly
         return domain
 ```
 
-通过 `UUID` 可以获取到 `domain` 对象, 接着检查了 `domain` 的状态, 保证后续的数据获取能正常进行.
+`instance` 是 `Ceilometer` 中的一类对象, 有名称和 `id` 等属性. 现在要做的是使用 `instance.id` 得到对应在 `libvirt` 中的 `domain` 对象.
+
+如果 `domain` 关机了, 就得不到它的运行数据, 所以接着检查了 `domain` 的状态.
 
 在这两个方法中涉及到很多的异常处理, 顺便来看看如何自定义异常.
 
@@ -116,10 +118,10 @@ class NoDataException(InspectorException):
     pass
 ```
 
-有 3 个要注意的地方:
+看起来也很简单, 只有 3 个要注意的地方:
 1. 继承 `Exception`, 定义自己的异常基类;
 1. 在初始化方法中可以传入异常信息;
-1. 再衍生出子类来区分异常类型.
+1. 再衍生出子类来细分异常类型.
 
 在这一部分中用到的 `libvirt` 方法:
 
@@ -131,7 +133,7 @@ class NoDataException(InspectorException):
     </tr>
     <tr>
         <td>
-            virConnect.lookupByUUIDString
+            virConnect.<br>lookupByUUIDString
         </td>
         <td>
             类型: virDomain
@@ -209,12 +211,11 @@ class NoDataException(InspectorException):
                                                 tx_drop=dom_stats[7])
 ```
 
-`domain` 的网络接口设备通过解析 `xml` 文件得到, 使用的解析工具包为 `lxml`.
+`domain` 的网络接口设备通过解析 `xml` 文件得到, 使用的工具包为 `lxml`. 接着检查了接口是否有设备名称和 `mac` 地址, 大概是因为会遇到必要字段不齐全的无效信息. 然后通过设备名称得到接口运行数据.
 
-接口必须具备设备名称和 `mac` 地址, 然后通过设备名称得到接口运行数据.
+最下面使用了 `yield` 关键字, 以生成器的方式返回数据, 可以减少内存的使用量. 返回值中包含许多字段, 这里使用了 `namedtuple` 来区分字段含义. 相比 `tuple`, `namedtuple` 不会占用更多空间, 因为字段信息只在类中保存一份.
 
-方法中使用了 `yield` 关键字, 以生成器的方式返回数据. 返回值中包含许多字段, 这里使用了 `namedtuple` 来区分字段含义.
-
+再后面的磁盘和计算资源数据也是采用同样的模式返回的.
 ```python
 InterfaceStats = collections.namedtuple('InterfaceStats',
                                         ['name', 'mac', 'fref', 'parameters',
@@ -241,10 +242,10 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
             含义:
             <ul>
                 <li>
-                    rx_bytes
+                    rx_bytes: number of received bytes
                 </li>
                 <li>
-                    rx_packets
+                    rx_packets: number of received packets
                 </li>
                 <li>
                     rx_errs
@@ -253,10 +254,10 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
                     rx_drop
                 </li>
                 <li>
-                    tx_bytes
+                    tx_bytes: number of transmitted bytes
                 </li>
                 <li>
-                    tx_packets
+                    tx_packets: number of transmitted packets
                 </li>
                 <li>
                     tx_errs
@@ -332,6 +333,8 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
                                           physical=block_info[2])
 ```
 
+这两块只需要直接获取信息, 没有特殊的处理.
+
 新使用的 `libvirt` 方法:
 
 <table>
@@ -349,19 +352,19 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
             含义:
             <ul>
                 <li>
-                    read requests
+                    read requests: number of read operations
                 </li>
                 <li>
-                    read bytes
+                    read bytes: number of bytes read
                 </li>
                 <li>
-                    write requests
+                    write requests: number of write operations
                 </li>
                 <li>
-                    written bytes
+                    written bytes: number of bytes written
                 </li>
                 <li>
-                    errs
+                    errs: number of errors
                 </li>
             </ul>
         </td>
@@ -418,13 +421,13 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
             含义:
             <ul>
                 <li>
-                    capacity
+                    capacity: capacity of the disk
                 </li>
                 <li>
-                    allocation
+                    allocation: allocation of the disk
                 </li>
                 <li>
-                    physical
+                    physical: usage of the disk
                 </li>
             </ul>
         </td>
@@ -437,7 +440,7 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
 
 ## 获取内存和 CPU 信息
 
-内存和 CPU 信息由同一个方法 `inspect_instance` 获取, 我们分开来看.
+内存和 CPU 同是计算资源, 它们的信息由一个方法 `inspect_instance` 获取. 我们分开来看.
 
 ```python
     def inspect_instance(self, instance, duration=None):
@@ -462,7 +465,7 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
         ...
 ```
 
-这里要对内存数据作单位换算, 所以在换算之前要先检查数据存在.
+先是获取内存信息的部分. 这里要对内存数据作单位换算, 可能无法保证每次采集都有需要的数据, 所以在换算之前要先检查数据是否得到.
 
 ```python
     def inspect_instance(self, instance, duration=None):
@@ -492,9 +495,11 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
 
 ```
 
-首先尝试使用 `vcpu` 的数据之和作为总的 `CPU_time`, 如果数据不足才去使用收集到的 `cpu.time`.
+再来取 `CPU` 数据. 再分配资源时, 我们可以给虚拟机分配多个虚拟 `CPU`, 在 `libvirt` 中, 每个虚 `CPU` 的信息用 `vcpu` 表示. 为了获得总的 `CPU` 时间, 这里先尝试对 `vcpu` 数据求和, 如果数据不足才去使用收集到的 `cpu.time`.
 
-这里用到的 `domainListGetStats` 可以获得 `domain` 的所有数据, 包括网络和磁盘信息, 返回值的结构也很复杂.
+这里用到的 `domainListGetStats` 可以获得 `domain` 的所有数据, 包括网络和磁盘信息, 或许可以取代前面用到的数据收集方法.
+
+在上面的循环中还用到了 `six` 程序包, 它可以提供兼容 `Python 2/3` 两个版本的方法. 有意思的是 `six` 这个名字来自于 `2 * 3`.
 
 用到的 `libvirt` 方法:
 
@@ -506,7 +511,7 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
   </tr>
   <tr>
     <td>
-      virDomain.memoryStats
+      virDomain.<br>memoryStats
     </td>
     <td>
       类型: dict<br>
@@ -551,11 +556,11 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
   </tr>
   <tr>
     <td>
-      virConnect.domainListGetStats
+      virConnect.<br>domainListGetStats
     </td>
     <td>
       类型: list<br>
-      结构: [(virDomain, stats_dict),...]
+      结构: [(virDomain, stats_dict), ...]
     </td>
     <td>
       domain:<br>
@@ -563,6 +568,50 @@ InterfaceStats = collections.namedtuple('InterfaceStats',
     </td>
   </tr>
 </table>
+
+## 重试
+
+虽然在采集各项数据之前已经获得了可用的连接, 但是到了采集的那一时刻, 还是可能出现连接不可用的情况. 那要使得程序更加健壮, 就要在异常发生时进行必要的重试, 所以可以看到每个采集方法都被这样一条语句所装饰:
+```python
+@libvirt_utils.retry_on_disconnect
+```
+
+方法是这么定义的:
+```python
+retry_on_disconnect = tenacity.retry(
+    retry=tenacity.retry_if_exception(is_disconnection_exception),
+    stop=tenacity.stop_after_attempt(2))
+```
+
+原来是由另一个方法赋值得到的, 相当于起了一个更易用的名称. 这儿的重试方法使用了 `tenacity` 软件包, 设置了发生什么异常时重试和重试次数.
+
+下面是判断是否为连接异常的方法.
+```python
+def is_disconnection_exception(e):
+    if not libvirt:
+        return False
+    return (isinstance(e, libvirt.libvirtError)
+            and e.get_error_code() in (libvirt.VIR_ERR_SYSTEM_ERROR,
+                                       libvirt.VIR_ERR_INTERNAL_ERROR)
+            and e.get_error_domain() in (libvirt.VIR_FROM_REMOTE,
+                                         libvirt.VIR_FROM_RPC))
+```
+
+## 总结
+
+`libvirt` 的文档看起来并不容易, 好在有这么多已经把 `libvirt` 用起来的项目可以学习. 通过阅读 `Ceilometer` 这一个局部的代码, 我们基本梳理出了哪些方法可以用来来获取虚拟机信息.
+
+此外, 还有许多编码的技巧也值得学习, 像是:
+
+1. 如何管理连接?
+1. 如何自定义异常?
+1. 使用 `lxml` 解析 `xml` 文件.
+1. `namedtuple` 的使用.
+1. 内置方法 `filter` 的使用.
+1. 使用 `tenacity` 实现重试.
+1. 还有装饰器的使用.
+
 ## 参考资料
 
 - [Libvirt Application Development Guide](https://libvirt.org/docs/libvirt-appdev-guide-python/en-US/html/)
+- [Tenacity: Retrying library for Python](https://github.com/jd/tenacity#tenacity)
