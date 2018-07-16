@@ -38,6 +38,7 @@
 - [01-2 使用 Docker 在 Ubuntu 中部署 Prometheus.md](./prometheus/01-2%20使用%20Docker%20在%20Ubuntu%20中部署%20Prometheus.md)
 - [01-3 使用 Docker 在 Ubuntu 中部署 Prometheus.md](./prometheus/01-3%20使用%20Docker%20在%20Ubuntu%20中部署%20Prometheus.md)
 - [02 服务发现.md](./prometheus/02%20服务发现.md)
+- [03 Python Client.md](./prometheus/03%20Python%20Client.md)
 
 ## python
 
