@@ -1,18 +1,22 @@
 # Python Client
 
-Prometheus 提供了有多种语言实现的客户端库, 可以将自定义的监测数据通过 HTTP 暴露给 Prometheus 采集.
+Prometheus 有多种语言实现的客户端库, 可以将我们自定义的监测数据通过 HTTP 提供给外部采集. 这篇笔记首先记录了 Python 客户端的基本使用, 同时也关注了下面几个问题:
+1. 客户端中几种监测数据类型的区别
+1. 采集到的数据样本如何保存
+1. 采集方法如何被调用
 
-## 简单示例
+## 三步示例
 
 在文档中提供了一个简单示例, 只要三步就能将客户端运行起来.
 
-### ONE 安装客户端
+**ONE 安装客户端**
 
 ```Shell
 pip install prometheus_client
 ```
 
-### TWO 运行示例程序
+**TWO 运行示例程序**
+
 ```Python
 import random
 import time
@@ -38,7 +42,7 @@ if __name__ == '__main__':
         process_request(random.random())
 ```
 
-在示例中, 只使用了客户端提供的一种数据类型 `Summary`, 它用于初始化的第一个参数是数据指标的 `label`, 可用于数据查询.
+示例中使用了客户端提供的一种数据类型 `Summary`, 它的第一个初始化参数是数据指标的名称, 可用于数据查询.
 
 在 Python 客户端中, `Summary` 类型只提供两类数据:
 - count 记录总数, 如调用次数
@@ -46,11 +50,11 @@ if __name__ == '__main__':
 
 没有提供分位点信息.
 
-### THREE 查看数据
+**THREE 查看数据**
 
-程序运行起来后, 在地址 [http://localhost:8080/]( http://localhost:8080/) 查看数据. 当然, 要作为数据抓取目标, 还需要修改 Prometheus 的配置文件.
+程序运行起来后, 在地址 [http://localhost:8080/]( http://localhost:8080/) 查看数据. 当然, 若要作为数据抓取目标, 还需要修改 Prometheus 的配置文件.
 
-下面就是示例程序在某一时刻抓取的信息.
+下面是某一时刻的数据样本.
 ```shell
 # HELP process_virtual_memory_bytes Virtual memory size in bytes.
 # TYPE process_virtual_memory_bytes gauge
@@ -79,11 +83,48 @@ request_processing_seconds_count 3978.0
 request_processing_seconds_sum 1989.6390966859744
 ```
 
-在这些数据中, 只有最后两行的 `request_processing_seconds` 是程序中自定义的, 其余信息都由客户端默认取得, 包括:
+在最后两行可以看到程序中定义的 `request_processing_seconds` 数据, 其余信息都由客户端默认取得, 包括:
 - 当前进程的运行数据
 - Python 解释器的基本信息
 
-在 Linux 系统中, 当前进程数据由 `/proc/self/stat` 文件中获得. `proc` 是系统内核以文件形式提供的进程数据接口, 通常挂载在 `/proc`.
+在 Linux 系统中, 当前进程数据由 `/proc/self/stat` 文件中获得. `proc` 是系统内核以文件形式提供的进程数据接口, 通常挂载在 `/proc`, 它是进程信息的直接来源.
+
+## 数据类型
+
+数据收集客户端主要提供了 4 种类型的监测数据, 包括 Counter, Gauge, Summary 和 Histogram. 目前这几种类型只在客户端有区别, 到了 Prometheus 服务端则按相同的方式处理.
+
+### \_ValueClass
+不论是哪种数据类型, 在内部数据都采用了同一种 `_ValueClass` 保存.
+
+在 Python 程序中实现并发通常要创建多个进程, 所以 `_ValueClass` 的实现考虑了单进程和多进程两种情况.
+
+在单进程的情况下, 指标数据被线程间共享, 所以要给数据值加锁.
+
+```python
+class _MutexValue(object):
+    '''A float protected by a mutex.'''
+
+    _multiprocess = False
+
+    def __init__(self, typ, metric_name, name, labelnames, labelvalues, **kwargs):
+        self._value = 0.0
+        self._lock = Lock()
+
+    def inc(self, amount):
+        with self._lock:
+            self._value += amount
+
+    def set(self, value):
+        with self._lock:
+            self._value = value
+
+    def get(self):
+        with self._lock:
+            return self._value
+```
+
+在多进程的情况下, 不同进程中采集到的数据会保存到各自的文件中, 再汇总得到总数据.
+
 
 
 
