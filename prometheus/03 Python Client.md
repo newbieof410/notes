@@ -123,7 +123,113 @@ class _MutexValue(object):
             return self._value
 ```
 
-在多进程的情况下, 不同进程中采集到的数据会保存到各自的文件中, 再汇总得到总数据.
+在多进程的情况下, 每个进程中的采集器都有一个独立的文件用于保存当前进程的数据, 所以获取总体数据就是要将分散的值加在一起. 这部分的程序可以当作多进程交互的一个示例, 不过具体实现比较复杂, 后面只考虑单一进程的情况.
+
+### Counter
+
+`Counter` 是最简单的一种数据类型, 内部只维护着一个 `_value`. 它提供了一个基本方法 `inc` 保证监测的数值只会单调增加.
+
+```python
+class Counter(object):
+
+    def __init__(self, name, labelnames, labelvalues):
+        self._value = _ValueClass(self._type, name, name, labelnames, labelvalues)
+
+    def inc(self, amount=1):
+        if amount < 0:
+            raise ValueError('Counters can only be incremented by non-negative amounts.')
+        self._value.inc(amount)
+
+    def count_exceptions(self, exception=Exception):
+        return _ExceptionCounter(self, exception)
+```
+
+另外一个方法 `count_exceptions` 用于对异常计数. 它的使用方式非常灵活: 统计一个函数时可以当作装饰器使用, 而统计一个代码块时则可以用作上下文管理器. 这是因为它定义了对应的特殊方法.
+
+```python
+class _ExceptionCounter(object):
+    def __init__(self, counter, exception):
+        self._counter = counter
+        self._exception = exception
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, typ, value, traceback):
+        if isinstance(value, self._exception):
+            self._counter.inc()
+
+    def __call__(self, f):
+        def wrapped(func, *args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return decorate(f, wrapped)
+```
+
+作为上下文管理器使用时, 如果内部代码因为异常而退出, `__exit__` 方法会接收到异常的描述信息, 根据描述信息就能判断是否为需要计数的异常了.
+
+### Gauge
+
+`Gauge` 内部也只维护着一个值, 但是这个值既可以增加也可以减少, 可以用来统计数量会上下波动的信息.
+
+它有三个基础方法: `inc`, `dec`, `set`.
+
+此外, 还有一个统计正在处理过程中的函数或代码块数量的方法 `track_inprogress` 和统计运行时间的方法 `time`. 这两个方法也有装饰器和上下文管理器两种使用方式, 实现与上面的 `count_exceptions` 类似. 在后面的两种类型中, 还会见到许多类似的方法.
+
+### Summary
+
+`Summary` 和前面两种类型就不一样了, 它的内部有两个值.
+
+```python
+class Summary(object):
+
+    def __init__(self, name, labelnames, labelvalues):
+        self._count = _ValueClass(self._type, name, name + '_count', labelnames, labelvalues)
+        self._sum = _ValueClass(self._type, name, name + '_sum', labelnames, labelvalues)
+```
+
+从示例获得的监测信息中能看到, 它得到了 `指标名称` + `_count`/`_sum` 这两个数据. 它们的含义是什么呢? 来看 `observe` 方法的定义.
+
+```python
+    def observe(self, amount):
+        '''Observe the given amount.'''
+        self._count.inc(1)
+        self._sum.inc(amount)
+```
+
+每次调用这个方法中, `count` 加一, `sum` 增加指定的数量. 可以知道 `count` 表示的是数量, 而 `sum` 代表总量. 如果还不清楚, 再来看下一个方法 `time`.
+
+```python
+    def time(self):
+
+        return _SummaryTimer(self)
+```
+
+`time` 用于统计方法或代码块的运行时间, 也有两种使用方式.
+
+```python
+class _SummaryTimer(object):
+    def __init__(self, summary):
+        self._summary = summary
+
+    def __enter__(self):
+        self._start = default_timer()
+
+    def __exit__(self, typ, value, traceback):
+        # Time can go backwards.
+        self._summary.observe(max(default_timer() - self._start, 0))
+
+    def __call__(self, f):
+        def wrapped(func, *args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return decorate(f, wrapped)
+```
+
+它在内部调用了方法 `observe`, 这时 `count` 就表示进入代码块的次数, 而 `sum` 表示运行的总时间.
+
+
+
 
 
 
