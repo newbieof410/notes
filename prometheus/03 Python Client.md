@@ -228,13 +228,77 @@ class _SummaryTimer(object):
 
 它在内部调用了方法 `observe`, 这时 `count` 就表示进入代码块的次数, 而 `sum` 表示运行的总时间.
 
+### Histogram
 
+最后一种 `Histogram` 类型最为复杂, 它会像柱状图一样统计分散在各个区间内的数据个数, 同时也保存了汇总后的值.
 
+下面是一段 `Histogram` 类型采集到的数据, 包括带 `_bucket` 后缀的区间信息, 和与 `Summary` 类型作用类似的数量和总量信息. 在表示区间的数据后, 附带了一个格式如 `{le="xxx"}` 的标签, 代表区间的上限, 其后数据的含义是落在小于等于这个上限的区间内数据的数量. `+Inf` 表示正的无穷大, 那么这个区间对应的值就应该是总的数据个数, 值与 `count` 相等.
 
+```
+request_latency_secondes_bucket{le="0.005"} 4.0
+request_latency_secondes_bucket{le="0.01"} 7.0
+request_latency_secondes_bucket{le="0.025"} 19.0
+request_latency_secondes_bucket{le="0.05"} 38.0
+request_latency_secondes_bucket{le="0.075"} 69.0
+request_latency_secondes_bucket{le="0.1"} 92.0
+request_latency_secondes_bucket{le="0.25"} 239.0
+request_latency_secondes_bucket{le="0.5"} 457.0
+request_latency_secondes_bucket{le="0.75"} 673.0
+request_latency_secondes_bucket{le="1.0"} 885.0
+request_latency_secondes_bucket{le="2.5"} 886.0
+request_latency_secondes_bucket{le="5.0"} 886.0
+request_latency_secondes_bucket{le="7.5"} 886.0
+request_latency_secondes_bucket{le="10.0"} 886.0
+request_latency_secondes_bucket{le="+Inf"} 886.0
+request_latency_secondes_count 886.0
+request_latency_secondes_sum 434.499202447003
+```
 
+`Histogram` 内部维护的数据数量与区间的划分数量有关.
 
+```python
+class Histogram(object):
 
+    def __init__(self, name, labelnames, labelvalues, buckets=(.005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, _INF)):
+        self._sum = _ValueClass(self._type, name, name + '_sum', labelnames, labelvalues)
 
+        ...
+
+        for b in buckets:
+            self._buckets.append(_ValueClass(self._type, name, name + '_bucket', bucket_labelnames, labelvalues + (_floatToGoString(b),)))
+```
+
+它和 `Summary` 一样, 提供了 `observe` 和 `time` 两个方法用于数据统计, 而 `time` 又是 `observe` 的一个特例, 特别用于统计时间.
+
+```python
+    def observe(self, amount):
+        '''Observe the given amount.'''
+        self._sum.inc(amount)
+        for i, bound in enumerate(self._upper_bounds):
+            if amount <= bound:
+                self._buckets[i].inc(1)
+                break
+```
+
+给定一个观测值, 总量会增加对应数量, 同时观测值所在区间加一. `Histogram` 中没有维护 `count` 数据, 因为可以使用区间数据间接得到.
+
+## 总结
+
+以上就是客户端提供的四种数据类型了. 如果只看说明文档, 很容易被 `Histogram` 和 `Summary` 的描述搞混淆, 现在至少知道 `Histogram` 中是保存了区间信息的. 另外文档中说到 `Summary` 会实时地计算分位点信息, 这在 Python 客户端中并没有对应的实现.
+
+再来回答开头提到的后两个问题.
+
+**统计方法如何被调用?**
+
+各种类型提供的数据统计方法大概可以分为两类. 第一类的方法如 `inc`, `set`, `observe` 可以用于主动更新数值; 第二类方法如 `time` 可以在经过一个代码块后自动更新数值.
+
+**采集到的样本如何保存?**
+
+从实现中可以看到, 所有的数据更新操作的都是内存中的一份数据, 客户端并不作数据持久化处理. 只有当 Prometheus 主动抓取时, 那一时刻的数据才会被服务端保存下来. 所以数据采集精度是与抓取频率有关的.
+
+还有另一种数据采集的方式会主动保存每一次得到的数据.
+
+最后再补充一点: 在客户端的实现中, 有一个叫做 `REGISTRY` 的对象, 所有实例化的采集器都会在其中注册, 当收到服务器的 `Get` 请求时, 会取出在注册中心注册的所有采集器的值以构造响应.
 
 ## 参考资料
 - [Prometheus Python Client](https://github.com/prometheus/client_python#prometheus-python-client)
