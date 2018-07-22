@@ -1,4 +1,4 @@
-# libvirt
+# Libvirt
 
 `libvirt` 提供了客户机管理 `API`, 起初为 `XEN` 设计,  后被拓展到多种虚拟机管理程序.
 

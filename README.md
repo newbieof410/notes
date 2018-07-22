@@ -18,7 +18,7 @@
 - [01 服务器配置.md](./flask/01%20服务器配置.md)
 - [02-1 WSGI 简介.md](./flask/02-1%20WSGI%20简介.md)
 - [02-2 WSGI_example.py](./flask/02-2%20WSGI_example.py)
-- [03 使用 Celery 执行后台任务.md](./flask/03%20使用%20Celery%20执行后台任务.md)
+- [03-1 使用 Celery 执行后台任务.md](./flask/03-1%20使用%20Celery%20执行后台任务.md)
 - [03-2 使用 Celery 执行周期任务.md](./flask/03-2%20使用%20Celery%20执行周期任务.md)
 - [04 Flask, Celery & RabbitMQ 的容器化部署.md](./flask/04%20Flask,%20Celery%20&%20RabbitMQ%20的容器化部署.md)
 - [05 使用 Queue 执行后台任务.md](./flask/05%20使用%20Queue%20执行后台任务.md)
@@ -27,14 +27,14 @@
 
 ## libvirt
 
-- [01-1 libvirt.md](./libvirt/01-1%20libvirt.md)
+- [01-1 Libvirt.md](./libvirt/01-1%20Libvirt.md)
 - [01-2 domain_example.xml](./libvirt/01-2%20domain_example.xml)
-- [02 libvirt snapshots.md](./libvirt/02%20libvirt%20snapshots.md)
+- [02 Libvirt Snapshots.md](./libvirt/02%20Libvirt%20Snapshots.md)
 - [03 Libvirt 在 Ceilometer 中的应用.md](./libvirt/03%20Libvirt%20在%20Ceilometer%20中的应用.md)
 
 ## prometheus
 
-- [01 使用 Docker 在 Ubuntu 中部署 Prometheus.md](./prometheus/01%20使用%20Docker%20在%20Ubuntu%20中部署%20Prometheus.md)
+- [01-1 使用 Docker 在 Ubuntu 中部署 Prometheus.md](./prometheus/01-1%20使用%20Docker%20在%20Ubuntu%20中部署%20Prometheus.md)
 - [01-2 使用 Docker 在 Ubuntu 中部署 Prometheus.md](./prometheus/01-2%20使用%20Docker%20在%20Ubuntu%20中部署%20Prometheus.md)
 - [01-3 使用 Docker 在 Ubuntu 中部署 Prometheus.md](./prometheus/01-3%20使用%20Docker%20在%20Ubuntu%20中部署%20Prometheus.md)
 - [02 服务发现.md](./prometheus/02%20服务发现.md)
@@ -44,7 +44,7 @@
 
 - [01 queue 模块学习.md](./python/01%20queue%20模块学习.md)
 - [02 协程 Coroutine.md](./python/02%20协程%20Coroutine.md)
-- [03 socket 基础.md](./python/03%20socket%20基础.md)
+- [03 Socket Basics.md](./python/03%20Socket%20Basics.md)
 - [04 Bitwise Operation.md](./python/04%20Bitwise%20Operation.md)
 - [05 Python 程序是如何运行起来的.md](./python/05%20Python%20程序是如何运行起来的.md)
 
