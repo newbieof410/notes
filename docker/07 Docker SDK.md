@@ -130,7 +130,61 @@ class ContainerApiMixin(object):
 
 使用 `mixin` 方式的多重继承, 可以减少命名冲突, 以及随之而来的因方法重写造成的混乱. 关于多重继承时 `super()` 如何工作可以查看这里的 [解释 &raquo;](https://stackoverflow.com/a/3277407).
 
+### Base URL
+Base URL 用于指定要与之通信的 Docker daemon 地址. 这个地址可以在初始化客户端 `DockerClient` 时指定, 当然也可以使用默认值.
+
+```python
+client = docker.DockerClient(base_url='unix://var/run/docker.sock')
+```
+
+用户提供的 URL 要经过函数 `parse_host` 处理, 如果用户没有提供也要由它赋上默认值. 由这个函数可以了解到 Docker daemon 支持下面几个应用层协议:
+1.  `http+unix`
+
+    默认值, 应该不算是标准协议类型, 用于在同一个 Unix 类系统中的客户端和服务器的通信. 默认的 Socket 位于 `/var/run/docker.sock`.
+
+    这种类型的 URL 在 `APIClient.__init__` 中又会被转换为 `http+docker://localhost`. 我不清楚为什么这么做, 可能是为了符合 URL 的格式, 毕竟在 host 部分不应该出现 `/`.
+
+1.  `npipe`
+
+    与系统类型相关. 如果是 Windows 系统, 则采用命名管道的通信方式.
+
+1.  `http(s)`
+
+如果客户端要向服务器发起请求, 不论采取了何种协议, 都是将特定的 REST API 添加在 base url 之后. 这个工作由 `APIClient._url` 完成.
+
+比如要获取容器信息, `ContainerApiMixin` 会使用下面的语句生成 URL.
+
+```Python
+u = self._url("/containers/json")
+```
+
+得到的结果为 `http+docker://localhost/v1.35/containers/json`. 对比初始版本的 API `http://localhost:4243/containers/ps` 就可以看出差异了.
+
+对比新旧两种 API, 可以看到在新版本中增加了 API 的版本信息. 这也是在 REST 设计中常见的做法, 它使得服务端在接口更新后具备向下的兼容性.
+
+### 更改 daemon 的监听接口
+原来我们是可以通过 TCP 与 daemon 进行通信的, 这样就能在浏览器上访问 REST 接口了.
+
+通过下面的步骤更改 daemon 设置.
+
+```shell
+# 修改配置文件 /etc/docker/daemon.json
+# 添加 host 记录, "hosts": ["tcp://127.0.0.1:4567"]
+$ sudo vim /etc/docker/daemon.json
+
+# 关闭 docker 服务
+$ sudo service docker stop
+
+# 手动启动 daemon
+$ dockerd
+```
+
+设置好后, 访问 [http://127.0.0.1:4567/v1.35/containers/json](http://127.0.0.1:4567/v1.35/containers/json) 即可得到运行中的容器信息列表.
+
+如何得到全部的容器信息? 从 `ContainerApiMixin.containers` 中可以找到能够使用的限定参数, 这样就能得到全部信息了 [http://127.0.0.1:4567/containers/json?all=1](http://127.0.0.1:4567/containers/json?all=1) .
+
 
 ## 参考资料
 - [What is a mixin, and why are they useful?](https://stackoverflow.com/a/547714)
 - [Mixins and Python](https://www.ianlewis.org/en/mixins-and-python)
+- [Configure the Docker daemon](https://docs.docker.com/config/daemon/#configure-the-docker-daemon)
