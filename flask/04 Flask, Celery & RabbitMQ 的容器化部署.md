@@ -78,7 +78,7 @@ from app.celery_worker import tasks
 ```
 
 ## Dockerfile
-```
+```dockerfile
 FROM python:3.6-alpine
 
 RUN pip install --upgrade pip
@@ -151,7 +151,7 @@ worker_1  | absolutely not recommended!
 在 `ENTRYPOINT` 中通常指定容器运行后默认执行的指令, 而在 `CMD` 中指定可变的参数.
 
 ## Docker Compose
-```
+```yaml
 version: '3'
 services:
   rabbit:
