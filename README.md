@@ -12,6 +12,7 @@
 - [04 Namespace 实验.md](./docker/04%20Namespace%20实验.md)
 - [05 Build Git Server with Docker.md](./docker/05%20Build%20Git%20Server%20with%20Docker.md)
 - [06 Bridge 网络.md](./docker/06%20Bridge%20网络.md)
+- [06-2 使用 tcpdump 抓取容器的网络通信.md](./docker/06-2%20使用%20tcpdump%20抓取容器的网络通信.md)
 - [07 Docker SDK.md](./docker/07%20Docker%20SDK.md)
 
 ## flask
