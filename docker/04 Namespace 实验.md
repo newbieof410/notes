@@ -1,85 +1,128 @@
 # Namespace 实验
-下面的一些操作(主要是挂载文件系统), 可能会修改掉系统文件, 所以保险一些的话可以在虚拟机中运行. 在 `Docker` 容器中, 像修改主机名的一些操作是无法执行的.
+实验中的一些操作(主要是挂载文件系统), 可能会影响到系统文件, 不过影响在重启后都可以恢复. 如果不放心, 可以在虚拟机中实验. 当然也可以使用容器, 不过在容器中像修改主机名的一些操作是无法执行的.
+
 ## 程序框架
-后续操作都在这段程序的基础上修改运行.
+后续操作都在下面这段程序的基础上修改执行. 在程序中使用 `clone` 系统调用创建一个子进程, 并将子进程放入新的命名空间.
+
+`clone` 的使用方式为:
+```c
+int clone(int (*fn)(void *), void *child_stack,
+          int flags, void *arg);
+```
+
+`clone` 的作用类似于 `fork`, 都用于创建子进程. 不同的是 `clone` 创建的子进程可以共享父进程的部分上下文, 比如内存空间. 所以 `clone` 可以用来实现多线程. 另一个不同点是, `clone` 创建的子进程会从 `fn` 所指向的函数位置开始执行, 参数通过 `arg` 传入.
+
+父进程要负责为子进程提供栈空间. 在 Linux 系统中, 栈地址由高向低增长, 所以 `child_stack` 通常指向子进程栈空间的最高地址处, 即栈底.
+
+`clone` 创建的子进程与父进程共享哪些资源使用 `flags` 参数控制. 实验中就是通过设置这个参数, 来将子进程放入不同的命名空间. 同时, `flags` 还关系到在子进程结束后, 父进程会收到的信号.
+
 ```c
 #define _GNU_SOURCE
+#include <errno.h>
 #include <sys/wait.h>
 #include <sched.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 #define STACK_SIZE (1024 * 1024)
-static char stack[STACK_SIZE];
-static char* const child_args[] = {
-  "/bin/bash", NULL
+
+void unix_error(char *msg) {
+    fprintf(stderr, "%s: %s\n", msg, strerror(errno));
+    exit(0);
+}
+
+char * const child_args[] = {
+    "/bin/bash", NULL
 };
 
-static int child(void *arg) {
-  printf("Enter child: \n");
-  execv("/bin/bash", child_args);
-  return 0;
+int child(void *args) {
+    printf("Enter child.\n");
+
+    /*Open a new bash shell*/
+
+    if (execv(child_args[0], child_args) < 0)
+        unix_error("Execv error");
+
+    exit(0);
 }
 
 int main(int argc, char *argv[]) {
-  printf("Enter main: \n");
-  pid_t pid = clone(child, stack + STACK_SIZE, SIGCHLD, NULL);
-  waitpid(pid, NULL, 0);
-  printf("Exit main.\n");
-  return 0;
+    char *stack;
+    char *stackTop;
+    pid_t pid;
+
+    printf("Enter main.\n");
+
+    /*Allocate stack for child*/
+
+    stack = malloc(STACK_SIZE);
+    if (stack == NULL)
+        unix_error("Malloc error");
+    stackTop = stack + STACK_SIZE;
+
+    /*Create child*/
+
+    pid = clone(child, stackTop, SIGCHLD, NULL);
+    if (pid < 0)
+        unix_error("Clone error");
+
+    /*Wait for child*/
+
+    if (waitpid(pid, NULL, 0) < 0)
+        unix_error("Waitpid error");
+
+    printf("Exit main.\n");
+
+    exit(0);
 }
 ```
-其中,
-- `execv` 第一个参数为可执行文件的路径; 第二个参数为传给可执行文件的运行参数数组, 要以 `NULL` 指针结束. 这行语句的作用是使用 `bash` 打开一层新的 `bash`.
-- `clone` 开启一个新的进程. 第一个参数为子进程执行的方法; 第二个参数为子进程栈空间的地址, 该空间由调用(父)进程分配, 在程序中为 `stack` 数组所在空间, 又因为栈空间从高地址向低地址增长, 所以程序中用 `stack + STACK_SIZE` 指向了地址的最高位; 第三个参数设置子进程结束后返回给调用进程的信号, 还有子进程与调用进程间共享的资源; 最后一个参数为传给子进程的参数.
-- `waitpid` 暂停调用进程, 等待子进程结束.
 
-在实验中通过 `clone` 开启新的 `bash` 进程, 并在第三个参数中设置不同的 `namespace` 选项, 观察效果.
+这里还有两个函数要说明.
+
+`execv` 用于在当前的进程上下文中开启一个新的进程. 新进程会取代旧进程. 其第一个参数 `path` 为要执行的文件的路径; 第二个参数 `argv` 为传给新进程的参数数组, 要以 `NULL` 指针结束. 按照惯例, 数组的第一个元素应该是要执行的文件名.
+
+在子进程中, 使用该函数打开一个新的 `bash` 以观察命名空间的变化.
+
+`waitpid` 用于暂停父进程, 等待子进程状态的变化.
 
 ## UTS namespace
 > UTS (UNIX Time-sharing System) namespace 提供了主机名和域名的隔离.
 
 修改 `clone` 调用.
 ```c
-  pid_t pid = clone(child, stack + STACK_SIZE, SIGCHLD | CLONE_NEWUTS, NULL);
+    pid = clone(child, stackTop, CLONE_NEWUTS | SIGCHLD, NULL);
 ```
 
 编译并执行.
 ```
-$ gcc -Wall ns_example.c && ./a.out
+$ gcc -Wall ns_example.c && sudo ./a.out
 ```
 
 程序运行后会进入新开启的 `bash`, 在其中修改主机名.
 ```
-$ sudo hostname container
+# hostname container
 ```
 
 查看主机名, 可以看到已经变成了 `container`.
 ```
-$ hostname
+# hostname
 container
 ```
 
-但是打开一个新的 `bash` 查看主机名并未发生变化, 说明修改只发生在命名空间内.
+但是 `exit` 退出子进程后再次查看, 主机名并未发生变化. 说明修改只发生在子进程命名空间内.
 
-在此基础上修改程序, 使程序每次运行都修改主机名为 `container`. 修改后需要使用 `sudo` 执行程序.
+在此基础上修改程序, 使程序每次运行都修改主机名为 `container`.
 ```c
-// 省略...
-#include <string.h>
+int child(void *args) {
+    printf("Enter child.\n");
 
-// 省略...
-static int child(void *args) {
-  printf("Enter child. \n");
-  char hostname[] = "container";
-  sethostname(hostname, strlen(hostname));
-  execv("/bin/bash", child_args);
-  return 0;
-}
+    char hostname[] = "container";
+    if (sethostname(hostname, strlen(hostname)) < 0)
+        unix_error("Sethostname error");
 
-int main(int argc, char *argv[]) {
-  printf("Enter main. \n");
-  pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWUTS | SIGCHLD, NULL);
-  // 省略...
+    // ...
 }
 ```
 
@@ -88,20 +131,16 @@ int main(int argc, char *argv[]) {
 
 修改 `clone` 调用.
 ```c
-  pid_t pid = clone(child, stack + STACK_SIZE,
-    CLONE_NEWUTS | CLONE_NEWIPC | SIGCHLD, NULL);
+    pid = clone(child, stackTop, CLONE_NEWIPC | CLONE_NEWUTS | SIGCHLD, NULL);
 ```
 
 编译运行后, 使用 `ipcmk` 命令新建消息队列.
 ```
-$ gcc -Wall ns_example.c && sudo ./a.out
-Enter main.
-Enter child.
 root@container:~/ns# ipcmk -Q
 Message queue id: 0
 ```
 
-使用 `ipcs` 查看消息队列.
+使用 `ipcs` 可以查看到刚刚创建的 id 为 0 的消息队列.
 ```
 root@container:~/ns# ipcs -q
 
@@ -110,7 +149,7 @@ key        msqid      owner      perms      used-bytes   messages
 0xa27ae9a8 0          root       644        0            0           
 ```
 
-退出子进程后再次查看, 是没有子进程做出的修改的.
+退出子进程后再次查看, 没有显示出该队列.
 ```
 $ ipcs -q
 
@@ -123,20 +162,18 @@ key        msqid      owner      perms      used-bytes   messages
 
 修改 `clone` 调用.
 ```c
-pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWUTS | CLONE_NEWPID |
-  SIGCHLD, NULL);
+    pid = clone(child, stackTop, CLONE_NEWPID |  CLONE_NEWIPC | CLONE_NEWUTS | SIGCHLD, NULL);
 ```
 
-编译运行, 进入子进程, 使用 `echo $$` 查看当前进程 `ID`.
+编译运行, 进入子进程. 使用 `echo $$` 查看当前进程 id 和父进程 id.
 ```
-$ gcc -Wall ns_example.c && sudo ./a.out
-Enter main.
-Enter child.
 root@container:~/ns# echo $$
 1
+root@container:~/ns# echo $PPID
+0
 ```
 
-可以看到进程 `ID` 为 1, 说明创建了子进程空间, 并且是该空间内的第一个进程.
+可以看到进程 id 为 1, 没有父进程. 说明子进程感知不到外部进程.
 
 ## Mount namespace
 > Mount namespace 隔离文件系统挂载点. 它是第一个 Linux 命名空间.
@@ -232,3 +269,7 @@ ip link
 - Docker 进阶与实战 2.4.2
 - Docker 容器与容器云 3.1.1
 - [Separation Anxiety: A Tutorial for Isolating Your System with Linux Namespaces](https://www.toptal.com/linux/separation-anxiety-isolating-your-system-with-linux-namespaces)
+- [clone(2) - Linux man page](https://linux.die.net/man/2/clone)
+- [execve(2) - Linux man page](https://linux.die.net/man/2/execve)
+- [waitpid(2) - Linux man page](https://linux.die.net/man/2/waitpid)
+- [How do I get the parent process ID of a given child process?]()
