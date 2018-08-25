@@ -277,8 +277,4 @@ ip link
 - [clone(2) - Linux man page](https://linux.die.net/man/2/clone)
 - [execve(2) - Linux man page](https://linux.die.net/man/2/execve)
 - [waitpid(2) - Linux man page](https://linux.die.net/man/2/waitpid)
-<<<<<<< HEAD
 - [How do I get the parent process ID of a given child process?](https://askubuntu.com/q/153976)
-=======
-- [How do I get the parent process ID of a given child process?]()
->>>>>>> 3b08bafebf60511648b362dc08b4296dfe988fa6
