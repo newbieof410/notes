@@ -210,8 +210,8 @@ Error, do this: mount -t proc proc /proc
 
 修改 `clone` 调用.
 ```c
-  pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWNET | CLONE_NEWUTS |
-    SIGCHLD, NULL);
+    pid = clone(child, stackTop, CLONE_NEWNET | CLONE_NEWNS |
+                CLONE_NEWPID |  CLONE_NEWIPC | CLONE_NEWUTS | SIGCHLD, NULL);
 ```
 
 分别在执行前和执行后, 使用 `ip link` 查看网络设备.
@@ -220,14 +220,56 @@ root@container:~/ns# ip link
 1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN mode DEFAULT group default qlen 1000
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
 ```
-进入子程序后, 只列出了一个回环设备, 而且状态为 `DOWN`, 因此要使容器能够连接到网络仍有许多工作要做.
+子进程只拥有一个默认的回环设备, 而且状态为 `DOWN`, 所以此时是无法与外界通信的. 要实现与其他命名空间, 以及外界的通信, 需要使用虚拟以太网设备 `veth`.
 
-## 总结
-最后还有一个 `user namespace` 用于隔离用户和用户组, 这部分的实验就略过了.
+`veth` 设备一般成对创建, 像网线的两端将两个网络命名空间连接起来. `veth pair` 的创建方式为:
 
-通过前面几个命名空间的操作, 也大概了解了用于隔离的系统调用的使用方法, 知道了在资源隔离中都要考虑哪些方面的内容.
+```
+$ sudo ip link add veth0 type veth peer name veth1
+```
 
-### Cheet Sheet
+上面的命令创建了两个彼此相连的 `veth` 设备 `veth0` 和 `veth1`. 接下来要将其中一端分配给子进程所在的网络命名空间.
+
+这一步需要打开两个终端窗口. 一个运行子进程, 另一个是默认终端, 在子进程命名空间之外.
+
+为了将 `veth1` 加入子进程命名空间, 需要得到父进程所观察到的子进程 id. 执行以下步骤:
+1.  查看父进程 id
+
+    ```
+    $ ps aux | grep a.out
+    root     28866  0.0  0.0  67600  4340 pts/1    S    11:38   0:00 sudo ./a.out
+    root     28877  0.0  0.0   5536   720 pts/1    S    11:38   0:00 ./a.out
+    ```
+1.  查找子进程 id
+
+    ```
+    $ pstree -p 28866
+    sudo(28866)───a.out(28877)───bash(28878)
+    ```
+
+这里可以看出, 虽然运行在新命名空间中的子进程感知不到父进程, 但是父进程却可以看到子进程.
+
+将 `veth1` 加入子进程.
+```
+$ sudo ip link set veth1 netns 28878
+```
+
+在子进程中查看新加入的网络设备.
+```
+# ip link
+1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+10: veth1@if11: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ether 72:2a:7c:da:55:33 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+```
+
+这里的 `veth1@if11` 表示位于连接另一端的网络设备序号为 11.
+
+在 `veth1` 被传入子进程的过程中, 父子进程通过 `pipe` 连接通信.
+
+连接了容器命名空间与全局命名空间后, 还要在主机中处理容器数据包的转发与地址转换, 这即是 `docker0` 所要负责的工作.
+
+## Cheet Sheet
 ```shell
 #  文件编译
 gcc -Wall <file> [-o output]
@@ -236,12 +278,8 @@ gcc -Wall <file> [-o output]
 echo $$
 # 父进程 ID
 echo $PPID
-# 显示进程树
-pstree
-
 # 前一个命令的退出状态码
 echo $?
-
 # 退出当前 Shell
 exit
 
@@ -262,12 +300,18 @@ ipcrm -Q <key>
 
 # 显示所有进程
 ps aux
+# 显示进程树
+pstree -p <pid>
 
 # mount 将 device 中 type 类型的文件系统挂载到 dir
 mount [-t type] <device> <dir>
 
 # 显示网络设备
 ip link
+# 创建 veth pair
+ip link add <p1-name> type veth peer name <p2-name>
+# 将网络设备加入新的网络命名空间
+ip link set <p2-name> netns <p2-namespace>
 ```
 
 ## 参考阅读
@@ -278,3 +322,4 @@ ip link
 - [execve(2) - Linux man page](https://linux.die.net/man/2/execve)
 - [waitpid(2) - Linux man page](https://linux.die.net/man/2/waitpid)
 - [How do I get the parent process ID of a given child process?](https://askubuntu.com/q/153976)
+- [veth - Virtual Ethernet Device](http://man7.org/linux/man-pages/man4/veth.4.html)
