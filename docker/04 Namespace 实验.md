@@ -1,5 +1,4 @@
 # Namespace 实验
-实验中的一些操作(主要是挂载文件系统), 可能会影响到系统文件, 不过影响在重启后都可以恢复. 如果不放心, 可以在虚拟机中实验. 当然也可以使用容器, 不过在容器中像修改主机名的一些操作是无法执行的.
 
 ## 程序框架
 后续操作都在下面这段程序的基础上修改执行. 在程序中使用 `clone` 系统调用创建一个子进程, 并将子进程放入新的命名空间.
@@ -87,7 +86,7 @@ int main(int argc, char *argv[]) {
 
 `waitpid` 用于暂停父进程, 等待子进程状态的变化.
 
-## UTS namespace
+## UTS Namespace
 > UTS (UNIX Time-sharing System) namespace 提供了主机名和域名的隔离.
 
 修改 `clone` 调用.
@@ -126,7 +125,7 @@ int child(void *args) {
 }
 ```
 
-## IPC namespace
+## IPC Namespace
 > IPC (Inter-Process Communication) namespace 涉及到信号量, 消息队列和共享内存等资源.
 
 修改 `clone` 调用.
@@ -157,7 +156,7 @@ $ ipcs -q
 key        msqid      owner      perms      used-bytes   messages    
 ```
 
-## PID namespace
+## PID Namespace
 > PID (Process ID) namespace 隔离进程号, 使不同命名空间下的进程可以有相同的进程号.
 
 修改 `clone` 调用.
@@ -175,28 +174,34 @@ root@container:~/ns# echo $PPID
 
 可以看到进程 id 为 1, 没有父进程. 说明子进程感知不到外部进程.
 
-## Mount namespace
+## Mount Namespace
 > Mount namespace 隔离文件系统挂载点. 它是第一个 Linux 命名空间.
 
-**这里遇到问题, 按照下面的步骤在子程序中重新挂载 `/proc` 后会影响到主机文件系统.**
+Mount Namespace 用于隔离容器中进程与主机的文件系统. 但要注意的是, 这里的隔离发生在挂载操作之后. 也就是说, 即使我们创建了一个进程, 并把它放在了一个隔离的 Mount Namespace, 在重新挂载文件系统之前, 它看到的仍是主机的文件系统.
 
-修改 `clone` 调用.
+因为 `ps` 命令获取的信息来自于 `/proc` 文件, 如果在容器中没有重新挂载 `/proc`, 那么在容器中执行 `ps` 命令仍会看到整个主机的进程信息.
+
+在这个实验中, 可以观察一下 `ps` 命令在 `/proc` 重新挂载前和挂载后的输出信息.
+
+在 `clone` 中添加 `CLONE_NEWNS`.
 ```c
   pid_t pid = clone(child, stack + STACK_SIZE, CLONE_NEWPID | CLONE_NEWNS |
     CLONE_NEWUTS | SIGCHLD, NULL);
 ```
 
-编译运行, 重新挂载 `/proc`, 查看所有进程.
+编译运行. 先简单查看进程数, 然后重新挂载 `/proc`, 再次查看, 此时只显示出命名空间中的两个进程.
 ```
 $ gcc -Wall ns_example.c && sudo ./a.out
-root@container:~/ns# mount -t proc none /proc
+root@container:~/ns# ps ax | wc -l
+297
+root@container:~/ns# mount -t proc proc /proc
 root@container:~/ns# ps ax
   PID TTY      STAT   TIME COMMAND
     1 tty1     S      0:00 /bin/bash
    12 tty1     R+     0:00 ps a
 ```
 
-在退出后再次查看仍会提示错误.
+从子进程退出后可能会遇到下面的错误, 这时只要以 root 身份执行提示中的命令就可以了.
 ```
 root@container:~/ns# exit
 exit
@@ -205,7 +210,14 @@ $ ps ax
 Error, do this: mount -t proc proc /proc
 ```
 
-## Network namespace
+这个问题是 Linux 的共享挂载机制造成的. 如果主挂载点被设置为共享的挂载方式, 那么在子进程中的子挂载点也会默认为共享状态. 在共享状态下, 一端的修改会传递到另外一端, 所以在命名空间中的修改才会影响到主机文件系统.
+
+要解决这个问题, 只要在重新 `mount` 前, 将挂载点设置为私有挂载就可以了.
+```
+mount --make-private /proc
+```
+
+## Network Namespace
 > Network namespace 会对网络相关的系统资源进行隔离.
 
 修改 `clone` 调用.
